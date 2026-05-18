@@ -145,6 +145,38 @@ Full lifecycle, inter-component protocols, and "why this and not that" decisions
 
 ---
 
+## 🗄️ Data isolation & auto-provisioning
+
+Declare `postgres = true` / `redis = true` / `s3 = true` in the manifest and the platform creates the backing resource on first deploy, encrypts the credentials, and injects them into the pod. Business users don't file tickets, don't pick passwords — and **every project gets a real isolated slice**, not shared creds with a "be nice" naming convention.
+
+<img src="docs/images/data-isolation.svg" alt="Per-project data isolation" width="100%" />
+
+| Service | Shared backbone | Per-project | Isolation |
+| :--- | :--- | :--- | :--- |
+| **PostgreSQL** | `user-postgres` container (separate from the control-plane DB) | Own database `proj_<slug>` + own role + random password | SQL: `GRANT` to own DB only — can't even `\c` siblings |
+| **Redis** | Shared `redis` container (Redis 6 ACL) | ACL user `proj-<slug>` + key pattern `~proj-<slug>:*` + `-@dangerous` | ACL: writing a non-prefixed key returns `NOPERM` |
+| **MinIO / S3** | Shared `minio` container (reuses platform storage) | Own bucket `proj-<slug>` + own IAM user + bucket-only policy | IAM: policy scoped — listing siblings returns 403 |
+
+Env vars injected into the pod:
+
+```bash
+DATABASE_URL             # postgres://proj_<slug>:****@<host>:5433/proj_<slug>
+REDIS_URL                # redis://proj-<slug>:****@<host>:6379/0
+REDIS_KEY_PREFIX         # proj-<slug>:
+S3_ENDPOINT              # <host>:9000
+S3_REGION                # us-east-1
+S3_ACCESS_KEY_ID         # proj-<slug>
+S3_SECRET_ACCESS_KEY     # ****
+S3_BUCKET                # proj-<slug>
+S3_USE_SSL               # false
+```
+
+Values are KEK-encrypted at rest in the platform DB, decrypted at deploy time, and dropped into a K8s Secret — the pod just reads `os.environ["DATABASE_URL"]`.
+
+On project deletion: PG database, Redis ACL user, and S3 user/policy are **dropped automatically**. The S3 bucket is **preserved** (so a misclick can't wipe years of objects) — admin confirms then `mc rb --force` manually.
+
+---
+
 ## 🛠️ Deploy on ECS
 
 Three steps: install the platform node → install workers → wire TLS + SSO. Every script is idempotent — safe to re-run.
@@ -335,5 +367,19 @@ Clean up: `make destroy`
 ## 🤝 Contributing
 
 Commit message style: `feat(scope): ...` / `fix(scope): ...` / `docs: ...`. See `git log --oneline` for examples.
+
+Before pushing: `go build ./...` and `cd web && npx tsc --noEmit` should both pass.
+
+---
+
+## ⭐ Star History
+
+<a href="https://star-history.com/#almightyYantao/it-iai&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=almightyYantao/it-iai&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=almightyYantao/it-iai&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=almightyYantao/it-iai&type=Date" />
+  </picture>
+</a>
 
 Before pushing: `go build ./...` and `cd web && npx tsc --noEmit` should both pass.

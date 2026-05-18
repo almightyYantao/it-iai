@@ -136,6 +136,38 @@ rm -rf ~/iai && git clone https://github.com/almightyYantao/it-iai.git ~/iai && 
 
 ---
 
+## 🗄️ 数据隔离 & 自动开通
+
+manifest 里声明 `postgres = true` / `redis = true` / `s3 = true`，平台部署时自动开通对应资源、把连接串加密注入到 pod。业务方不用申请、不用配 DNS、不用想密码——但每个项目拿到的都是**真隔离**的切片，不是共享凭据。
+
+<img src="docs/images/data-isolation.svg" alt="Per-project data isolation" width="100%" />
+
+| 服务 | 共享底座 | 每项目派生 | 隔离方式 |
+| :--- | :--- | :--- | :--- |
+| **PostgreSQL** | `user-postgres` 容器（独立 PG，跟控制面 DB 分开） | 独立 database `proj_<slug>` + 独立 role + 随机密码 | SQL 层：`GRANT` 只到自家 DB，跨项目 `\c` 都不行 |
+| **Redis** | 共享 `redis` 容器（Redis 6 ACL） | ACL 用户 `proj-<slug>` + 限制 key 前缀 `~proj-<slug>:*` + 禁 `@dangerous` | ACL 层：写非前缀 key 直接 `NOPERM` |
+| **MinIO / S3** | 共享 `minio` 容器（复用平台底座） | 独立 bucket `proj-<slug>` + 独立 IAM 用户 + bucket-only policy | IAM 层：policy 锁死，列别人 bucket 直接 403 |
+
+注入到 pod 的环境变量：
+
+```bash
+DATABASE_URL             # postgres://proj_<slug>:****@<host>:5433/proj_<slug>
+REDIS_URL                # redis://proj-<slug>:****@<host>:6379/0
+REDIS_KEY_PREFIX         # proj-<slug>:
+S3_ENDPOINT              # <host>:9000
+S3_REGION                # us-east-1
+S3_ACCESS_KEY_ID         # proj-<slug>
+S3_SECRET_ACCESS_KEY     # ****
+S3_BUCKET                # proj-<slug>
+S3_USE_SSL               # false
+```
+
+值在数据库里用 KEK 加密落地，部署时解密注入到 K8s Secret，pod 里读 `os.environ["DATABASE_URL"]` 就能用。
+
+项目删除时：PG 数据库 + Redis ACL 用户 + S3 user/policy **自动撤销**；S3 bucket 保留（防止误删丢数据，admin 确认后手工 `mc rb --force` 清理）。
+
+---
+
 ## 🛠️ 部署到 ECS
 
 3 步：装平台节点 → 装 worker → 配 TLS + SSO。每个脚本都幂等，重复跑安全。
@@ -327,3 +359,15 @@ bash ../../skill/scripts/push.sh
 提 PR / commit message 风格：`feat(scope): ...` / `fix(scope): ...` / `docs: ...`，看 `git log --oneline` 找现成模板。
 
 代码改动 → 先 `go build ./...` + `cd web && npx tsc --noEmit` 都过再 push。
+
+---
+
+## ⭐ Star History
+
+<a href="https://star-history.com/#almightyYantao/it-iai&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=almightyYantao/it-iai&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=almightyYantao/it-iai&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=almightyYantao/it-iai&type=Date" />
+  </picture>
+</a>

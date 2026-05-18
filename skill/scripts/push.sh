@@ -43,18 +43,20 @@ vd_preflight "$manifest"
 # Non-TTY (CI, piped Claude tool call) accepts the detection as-is.
 needs_pg=$(echo "$manifest" | jq -r '.needs.postgres // false')
 needs_redis=$(echo "$manifest" | jq -r '.needs.redis // false')
+needs_s3=$(echo "$manifest" | jq -r '.needs.s3 // false')
 
-if [[ "$needs_pg" == "true" || "$needs_redis" == "true" ]]; then
+if [[ "$needs_pg" == "true" || "$needs_redis" == "true" || "$needs_s3" == "true" ]]; then
   vd_info "检测到依赖："
-  [[ "$needs_pg"    == "true" ]] && vd_info "  PostgreSQL ✓（部署后平台会自动开一个 DB 并注入 DATABASE_URL）"
-  [[ "$needs_redis" == "true" ]] && vd_info "  Redis ✓（部署后平台会自动注入 REDIS_URL）"
+  [[ "$needs_pg"    == "true" ]] && vd_info "  PostgreSQL ✓（自动开独立 DB；注入 DATABASE_URL）"
+  [[ "$needs_redis" == "true" ]] && vd_info "  Redis ✓（自动开 ACL 用户 + 独立 key 前缀；注入 REDIS_URL / REDIS_KEY_PREFIX）"
+  [[ "$needs_s3"    == "true" ]] && vd_info "  S3 ✓（自动开独立 bucket + IAM user；注入 S3_ENDPOINT / S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY / S3_BUCKET 等）"
 
   if [[ -t 0 ]]; then
     printf '\033[36m?\033[0m 用平台自动开通这些服务？回车 = 是；输入 n = 跳过（你自己注入连接串） [Y/n]: ' >&2
     read -r ans || true
     if [[ "$ans" =~ ^[nN] ]]; then
-      manifest=$(echo "$manifest" | jq '.needs.postgres = false | .needs.redis = false')
-      vd_info "已跳过自动开通——记得自己在项目详情页填 DATABASE_URL / REDIS_URL（或在 .vibedeploy.toml 里写 env）"
+      manifest=$(echo "$manifest" | jq '.needs.postgres = false | .needs.redis = false | .needs.s3 = false')
+      vd_info "已跳过自动开通——记得自己在项目详情页填环境变量（或在 .vibedeploy.toml 里写 env）"
     fi
   fi
 fi

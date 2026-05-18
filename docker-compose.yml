@@ -23,8 +23,27 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    env_file: .env
+    # ACL setup:
+    #   * --aclfile makes ACL changes survive restart (without it, ACL SETUSER
+    #     additions vanish when the container recycles).
+    #   * requirepass and aclfile are mutually exclusive — when aclfile is on,
+    #     the default user's password lives inside the ACL file.
+    #   * The entrypoint bootstrap creates the ACL file with the admin password
+    #     baked in if it doesn't exist (first-boot only). Subsequent ACL
+    #     SETUSER calls from control-plane mutate the file in place.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        if [ ! -s /data/users.acl ]; then
+          echo "user default on >$$CP_USER_REDIS_ADMIN_PASSWORD ~* &* +@all" > /data/users.acl
+        fi
+        exec redis-server --aclfile /data/users.acl --save 60 1
     ports:
       - "6379:6379"
+    volumes:
+      - redisdata:/data
 
   # user-postgres — a SEPARATE PG instance for auto-provisioned user-app
   # databases. Kept separate from the control-plane PG so:
@@ -156,5 +175,6 @@ volumes:
   pgdata:
   userpgdata:
   miniodata:
+  redisdata:
   registrydata:
   buildworkdir:

@@ -1,0 +1,209 @@
+<svg viewBox="0 0 1400 880" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="iai per-project data isolation">
+  <defs>
+    <style>
+      .title       { font: 700 22px ui-sans-serif, system-ui, sans-serif; fill: #0F766E; letter-spacing: 1.4px; text-transform: uppercase; }
+      .row-label   { font: 700 18px ui-sans-serif, system-ui, sans-serif; fill: #134E4A; }
+      .row-sub     { font: 400 13px ui-monospace, monospace; fill: #475569; }
+      .shared-fill   { fill: #F1F5F9; }
+      .shared-stroke { stroke: #94A3B8; stroke-width: 1.5; }
+      .shared-title  { font: 600 16px ui-sans-serif, system-ui, sans-serif; fill: #334155; }
+      .shared-sub    { font: 400 12px ui-monospace, monospace; fill: #64748B; }
+      .slice-fill    { fill: #ECFEFF; }
+      .slice-stroke  { stroke: #0891B2; stroke-width: 1.5; }
+      .slice-name    { font: 600 13px ui-monospace, monospace; fill: #155E75; }
+      .slice-sub     { font: 400 11px ui-sans-serif, system-ui, sans-serif; fill: #475569; }
+      .iso           { font: 500 12px ui-sans-serif, system-ui, sans-serif; fill: #B45309; }
+      .iso-tag       { fill: #FEF3C7; stroke: #F59E0B; stroke-width: 1; }
+      .env-fill      { fill: #FFFBEB; }
+      .env-stroke    { stroke: #F59E0B; stroke-width: 1.5; }
+      .env-title     { font: 600 14px ui-sans-serif, system-ui, sans-serif; fill: #92400E; }
+      .env-line      { font: 400 12px ui-monospace, monospace; fill: #78350F; }
+      .arrow         { stroke: #0F766E; stroke-width: 1.5; fill: none; }
+      .legend        { font: 400 12px ui-sans-serif, system-ui, sans-serif; fill: #475569; }
+    </style>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0F766E"/>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="880" fill="#FAFAF9"/>
+
+  <text x="60" y="46" class="title">Per-project data isolation</text>
+  <text x="60" y="70" class="legend">
+    Each service runs as a single shared instance. Each project gets a fully isolated slice — own credentials, own namespace, can't see siblings.
+  </text>
+
+  <!-- ============================== ROW 1: POSTGRES ============================== -->
+  <g transform="translate(0, 110)">
+    <text class="row-label" x="60" y="0">① PostgreSQL  ·  user-postgres</text>
+    <text class="row-sub"   x="60" y="22">每项目独立数据库 + 独立账号  ·  CREATE DATABASE proj_&lt;slug&gt;  ·  GRANT ALL</text>
+
+    <!-- Shared instance -->
+    <rect class="shared-fill shared-stroke" x="60" y="42" width="240" height="160" rx="10"/>
+    <text class="shared-title" x="78" y="68">user-postgres</text>
+    <text class="shared-sub"   x="78" y="88">postgres:16-alpine</text>
+    <text class="shared-sub"   x="78" y="104">admin: iaiadmin</text>
+    <text class="shared-sub"   x="78" y="120">port: 5433 (公网)</text>
+    <line x1="78" y1="132" x2="282" y2="132" stroke="#CBD5E1" stroke-width="1"/>
+    <text class="shared-sub"   x="78" y="150" fill="#0F766E">+ 每项目派生:</text>
+    <text class="shared-sub"   x="78" y="166">  - 独立 DATABASE</text>
+    <text class="shared-sub"   x="78" y="180">  - 独立 ROLE / password</text>
+    <text class="shared-sub"   x="78" y="194">  - GRANT 仅限自家</text>
+
+    <!-- Per-project slices -->
+    <g transform="translate(380, 42)">
+      <rect class="slice-fill slice-stroke" x="0"   y="0"  width="180" height="160" rx="8"/>
+      <text class="slice-name" x="14" y="22">proj_app1</text>
+      <text class="slice-sub"  x="14" y="42">DB: proj_app1</text>
+      <text class="slice-sub"  x="14" y="60">USER: proj_app1</text>
+      <text class="slice-sub"  x="14" y="78">PASS: ████████</text>
+      <line x1="14" y1="90" x2="166" y2="90" stroke="#CBD5E1"/>
+      <text class="slice-sub"  x="14" y="108" fill="#155E75">隔离方式：</text>
+      <text class="slice-sub"  x="14" y="126">SQL 层；连不到</text>
+      <text class="slice-sub"  x="14" y="142">proj_app2 等</text>
+
+      <rect class="slice-fill slice-stroke" x="200" y="0"  width="180" height="160" rx="8"/>
+      <text class="slice-name" x="214" y="22">proj_app2</text>
+      <text class="slice-sub"  x="214" y="42">DB: proj_app2</text>
+      <text class="slice-sub"  x="214" y="60">USER: proj_app2</text>
+      <text class="slice-sub"  x="214" y="78">PASS: ████████</text>
+      <line x1="214" y1="90" x2="366" y2="90" stroke="#CBD5E1"/>
+      <text class="slice-sub"  x="214" y="108" fill="#155E75">隔离方式：</text>
+      <text class="slice-sub"  x="214" y="126">SQL 层；连不到</text>
+      <text class="slice-sub"  x="214" y="142">proj_app1 等</text>
+
+      <rect class="slice-fill slice-stroke" x="400" y="0"  width="180" height="160" rx="8"/>
+      <text class="slice-name" x="414" y="22">proj_app3</text>
+      <text class="slice-sub"  x="414" y="42">DB: proj_app3</text>
+      <text class="slice-sub"  x="414" y="60">USER: proj_app3</text>
+      <text class="slice-sub"  x="414" y="78">PASS: ████████</text>
+      <line x1="414" y1="90" x2="566" y2="90" stroke="#CBD5E1"/>
+      <text class="slice-sub"  x="414" y="108" fill="#155E75">隔离方式：</text>
+      <text class="slice-sub"  x="414" y="126">SQL 层；连不到</text>
+      <text class="slice-sub"  x="414" y="142">proj_app1 等</text>
+    </g>
+
+    <!-- Isolation badge -->
+    <g transform="translate(1000, 100)">
+      <rect class="iso-tag" x="0" y="0" width="340" height="44" rx="22"/>
+      <text class="iso" x="20" y="28">真隔离  ·  独立 DB + GRANT 限制</text>
+    </g>
+  </g>
+
+  <!-- ============================== ROW 2: REDIS ============================== -->
+  <g transform="translate(0, 360)">
+    <text class="row-label" x="60" y="0">② Redis  ·  shared redis (ACL)</text>
+    <text class="row-sub"   x="60" y="22">每项目独立 ACL 用户 + key 前缀  ·  ~proj-&lt;slug&gt;:*  ·  -@dangerous</text>
+
+    <!-- Shared instance -->
+    <rect class="shared-fill shared-stroke" x="60" y="42" width="240" height="160" rx="10"/>
+    <text class="shared-title" x="78" y="68">redis</text>
+    <text class="shared-sub"   x="78" y="88">redis:7-alpine</text>
+    <text class="shared-sub"   x="78" y="104">admin: default</text>
+    <text class="shared-sub"   x="78" y="120">port: 6379 (公网)</text>
+    <line x1="78" y1="132" x2="282" y2="132" stroke="#CBD5E1" stroke-width="1"/>
+    <text class="shared-sub"   x="78" y="150" fill="#0F766E">+ 每项目派生:</text>
+    <text class="shared-sub"   x="78" y="166">  - ACL SETUSER</text>
+    <text class="shared-sub"   x="78" y="180">  - 限制 key 前缀</text>
+    <text class="shared-sub"   x="78" y="194">  - 禁 @dangerous 类</text>
+
+    <!-- Slices -->
+    <g transform="translate(380, 42)">
+      <rect class="slice-fill slice-stroke" x="0"   y="0"  width="180" height="160" rx="8"/>
+      <text class="slice-name" x="14" y="22">proj-app1</text>
+      <text class="slice-sub"  x="14" y="42">USER: proj-app1</text>
+      <text class="slice-sub"  x="14" y="60">PASS: ████████</text>
+      <text class="slice-sub"  x="14" y="78">~proj-app1:*</text>
+      <line x1="14" y1="90" x2="166" y2="90" stroke="#CBD5E1"/>
+      <text class="slice-sub"  x="14" y="108" fill="#155E75">隔离方式：</text>
+      <text class="slice-sub"  x="14" y="126">ACL；前缀外</text>
+      <text class="slice-sub"  x="14" y="142">的 key NOPERM</text>
+
+      <rect class="slice-fill slice-stroke" x="200" y="0"  width="180" height="160" rx="8"/>
+      <text class="slice-name" x="214" y="22">proj-app2</text>
+      <text class="slice-sub"  x="214" y="42">USER: proj-app2</text>
+      <text class="slice-sub"  x="214" y="60">PASS: ████████</text>
+      <text class="slice-sub"  x="214" y="78">~proj-app2:*</text>
+      <line x1="214" y1="90" x2="366" y2="90" stroke="#CBD5E1"/>
+      <text class="slice-sub"  x="214" y="108" fill="#155E75">隔离方式：</text>
+      <text class="slice-sub"  x="214" y="126">ACL；前缀外</text>
+      <text class="slice-sub"  x="214" y="142">的 key NOPERM</text>
+
+      <rect class="slice-fill slice-stroke" x="400" y="0"  width="180" height="160" rx="8"/>
+      <text class="slice-name" x="414" y="22">proj-app3</text>
+      <text class="slice-sub"  x="414" y="42">USER: proj-app3</text>
+      <text class="slice-sub"  x="414" y="60">PASS: ████████</text>
+      <text class="slice-sub"  x="414" y="78">~proj-app3:*</text>
+      <line x1="414" y1="90" x2="566" y2="90" stroke="#CBD5E1"/>
+      <text class="slice-sub"  x="414" y="108" fill="#155E75">隔离方式：</text>
+      <text class="slice-sub"  x="414" y="126">ACL；前缀外</text>
+      <text class="slice-sub"  x="414" y="142">的 key NOPERM</text>
+    </g>
+
+    <g transform="translate(1000, 100)">
+      <rect class="iso-tag" x="0" y="0" width="340" height="44" rx="22"/>
+      <text class="iso" x="20" y="28">真隔离  ·  Redis 6+ ACL + key 前缀</text>
+    </g>
+  </g>
+
+  <!-- ============================== ROW 3: MINIO ============================== -->
+  <g transform="translate(0, 610)">
+    <text class="row-label" x="60" y="0">③ S3  ·  shared minio</text>
+    <text class="row-sub"   x="60" y="22">每项目独立 bucket + IAM user + policy  ·  仅允许访问自家 bucket</text>
+
+    <rect class="shared-fill shared-stroke" x="60" y="42" width="240" height="160" rx="10"/>
+    <text class="shared-title" x="78" y="68">minio</text>
+    <text class="shared-sub"   x="78" y="88">platform shared</text>
+    <text class="shared-sub"   x="78" y="104">admin: iaiadmin</text>
+    <text class="shared-sub"   x="78" y="120">port: 9000 (公网)</text>
+    <line x1="78" y1="132" x2="282" y2="132" stroke="#CBD5E1" stroke-width="1"/>
+    <text class="shared-sub"   x="78" y="150" fill="#0F766E">+ 每项目派生:</text>
+    <text class="shared-sub"   x="78" y="166">  - 独立 bucket</text>
+    <text class="shared-sub"   x="78" y="180">  - 独立 access key</text>
+    <text class="shared-sub"   x="78" y="194">  - policy 锁到 bucket</text>
+
+    <g transform="translate(380, 42)">
+      <rect class="slice-fill slice-stroke" x="0"   y="0"  width="180" height="160" rx="8"/>
+      <text class="slice-name" x="14" y="22">proj-app1</text>
+      <text class="slice-sub"  x="14" y="42">bucket: proj-app1</text>
+      <text class="slice-sub"  x="14" y="60">AK: proj-app1</text>
+      <text class="slice-sub"  x="14" y="78">SK: ████████</text>
+      <line x1="14" y1="90" x2="166" y2="90" stroke="#CBD5E1"/>
+      <text class="slice-sub"  x="14" y="108" fill="#155E75">隔离方式：</text>
+      <text class="slice-sub"  x="14" y="126">IAM policy 锁定</text>
+      <text class="slice-sub"  x="14" y="142">仅自家 bucket</text>
+
+      <rect class="slice-fill slice-stroke" x="200" y="0"  width="180" height="160" rx="8"/>
+      <text class="slice-name" x="214" y="22">proj-app2</text>
+      <text class="slice-sub"  x="214" y="42">bucket: proj-app2</text>
+      <text class="slice-sub"  x="214" y="60">AK: proj-app2</text>
+      <text class="slice-sub"  x="214" y="78">SK: ████████</text>
+      <line x1="214" y1="90" x2="366" y2="90" stroke="#CBD5E1"/>
+      <text class="slice-sub"  x="214" y="108" fill="#155E75">隔离方式：</text>
+      <text class="slice-sub"  x="214" y="126">IAM policy 锁定</text>
+      <text class="slice-sub"  x="214" y="142">仅自家 bucket</text>
+
+      <rect class="slice-fill slice-stroke" x="400" y="0"  width="180" height="160" rx="8"/>
+      <text class="slice-name" x="414" y="22">proj-app3</text>
+      <text class="slice-sub"  x="414" y="42">bucket: proj-app3</text>
+      <text class="slice-sub"  x="414" y="60">AK: proj-app3</text>
+      <text class="slice-sub"  x="414" y="78">SK: ████████</text>
+      <line x1="414" y1="90" x2="566" y2="90" stroke="#CBD5E1"/>
+      <text class="slice-sub"  x="414" y="108" fill="#155E75">隔离方式：</text>
+      <text class="slice-sub"  x="414" y="126">IAM policy 锁定</text>
+      <text class="slice-sub"  x="414" y="142">仅自家 bucket</text>
+    </g>
+
+    <g transform="translate(1000, 100)">
+      <rect class="iso-tag" x="0" y="0" width="340" height="44" rx="22"/>
+      <text class="iso" x="20" y="28">真隔离  ·  IAM user + bucket policy</text>
+    </g>
+  </g>
+
+  <!-- ============================== FOOTER: env vars handed to a pod ============================== -->
+  <g transform="translate(60, 810)">
+    <rect class="env-fill env-stroke" x="0" y="0" width="1280" height="50" rx="10"/>
+    <text class="env-title" x="20" y="22">控制面在 reconcile 时把这些 env 加密注入到 pod（K8s Secret）：</text>
+    <text class="env-line"  x="20" y="42">DATABASE_URL · REDIS_URL · REDIS_KEY_PREFIX · S3_ENDPOINT · S3_REGION · S3_ACCESS_KEY_ID · S3_SECRET_ACCESS_KEY · S3_BUCKET · S3_USE_SSL</text>
+  </g>
+</svg>

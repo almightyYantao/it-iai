@@ -13,7 +13,7 @@ vd_scan_manifest() {
   local dir="${1:-.}"
   cd "$dir"
 
-  local name port build="" start="" lang="" needs_pg=false needs_redis=false
+  local name port build="" start="" lang="" needs_pg=false needs_redis=false needs_s3=false
   local port_explicit=false
 
   # 1) explicit override from .vibedeploy.toml
@@ -29,6 +29,7 @@ vd_scan_manifest() {
     start=$(awk -F'"'         '/^start *=/{print $2; exit}' .vibedeploy.toml || true)
     grep -qE '^postgres *= *true' .vibedeploy.toml && needs_pg=true
     grep -qE '^redis *= *true'    .vibedeploy.toml && needs_redis=true
+    grep -qE '^s3 *= *true'       .vibedeploy.toml && needs_s3=true
     if [[ -n "$toml_port" ]]; then
       port=$toml_port
       port_explicit=true
@@ -46,6 +47,7 @@ vd_scan_manifest() {
     [[ -z "$build" ]] && build=$(jq -r '.scripts.build // empty' package.json 2>/dev/null || true)
     grep -qE '"(pg|prisma|sequelize|typeorm|knex|drizzle-orm)"' package.json && needs_pg=true
     grep -qE '"(ioredis|redis)"' package.json && needs_redis=true
+    grep -qE '"(@aws-sdk/client-s3|aws-sdk|minio|@minio/minio)"' package.json && needs_s3=true
     : "${port:=3000}"
   elif [[ -f requirements.txt || -f pyproject.toml ]]; then
     lang="python"
@@ -59,6 +61,7 @@ vd_scan_manifest() {
 
     grep -qiE 'psycopg|sqlalchemy|asyncpg|django' requirements.txt pyproject.toml 2>/dev/null && needs_pg=true
     grep -qiE 'redis'                              requirements.txt pyproject.toml 2>/dev/null && needs_redis=true
+    grep -qiE 'boto3|aioboto3|minio'               requirements.txt pyproject.toml 2>/dev/null && needs_s3=true
 
     # Framework-aware default port. Flask=5000, FastAPI/Django=8000.
     if [[ -z "${port:-}" ]]; then
@@ -100,13 +103,14 @@ vd_scan_manifest() {
     --arg start "$start" \
     --argjson port "$port" \
     --argjson postgres "$needs_pg" \
-    --argjson redis    "$needs_redis" '
+    --argjson redis    "$needs_redis" \
+    --argjson s3       "$needs_s3" '
   {
     name: $name,
     language: $lang,
     port: $port,
     build: ($build // ""),
     start: ($start // ""),
-    needs: { postgres: $postgres, redis: $redis }
+    needs: { postgres: $postgres, redis: $redis, s3: $s3 }
   }'
 }

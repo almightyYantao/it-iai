@@ -48,22 +48,27 @@ type ControlPlane struct {
 	Kubeconfig    string `env:"CP_KUBECONFIG" envDefault:"/root/.kube/config"`
 	IngressClass  string `env:"CP_K8S_INGRESS_CLASS" envDefault:"traefik"`
 
-	// User-app sidecar provisioning (PG / Redis). Same dual-host pattern as
-	// the image registry above:
-	//   * UserPGAdminURL — control-plane uses this URL to CREATE DATABASE /
-	//     CREATE USER. Resolved inside the docker-compose network, so the
-	//     hostname is the compose service name `user-postgres`.
-	//   * UserPGPublicHost — what we put into the DATABASE_URL we hand the
-	//     user pod. The pod is in K3s, not in compose's network, so it
-	//     reaches the platform host's published port (e.g. 5433).
-	// Leave both empty to disable PG auto-provisioning (manifest.needs.postgres
-	// is then a no-op; users must inject DATABASE_URL themselves).
+	// User-app sidecar provisioning. Each service follows the same
+	// "admin URL (internal compose network) + public host (what user pods
+	// see in their injected env)" pattern as the image registry above.
+	// Leaving the admin half empty disables provisioning for that service
+	// (manifest.needs.* becomes a no-op; users must inject the env var
+	// themselves).
+	//
+	// PG: control-plane runs CREATE DATABASE / CREATE USER on AdminURL,
+	// pods connect using PublicHost in DATABASE_URL.
 	UserPGAdminURL   string `env:"CP_USER_PG_ADMIN_URL"`
 	UserPGPublicHost string `env:"CP_USER_PG_PUBLIC_HOST"`
-	// Redis is simpler — we share one instance and namespace by key prefix,
-	// no per-project DB. Template gets {{slug}} substituted before being
-	// written into project_env. Empty disables Redis auto-provisioning.
-	UserRedisURLTemplate string `env:"CP_USER_REDIS_URL_TEMPLATE"`
+	// Redis: ACL SETUSER on AdminURL (default user + admin password),
+	// per-project user with key prefix restriction. Pods connect via
+	// PublicHost with their project-specific user/password.
+	UserRedisAdminURL   string `env:"CP_USER_REDIS_ADMIN_URL"`
+	UserRedisPublicHost string `env:"CP_USER_REDIS_PUBLIC_HOST"`
+	// S3 / MinIO: reuses the platform's MinIO admin creds (already configured
+	// above for source-tarball storage) — that admin can create per-project
+	// buckets, users, and policies. PublicHost is what pods see in S3_ENDPOINT.
+	UserS3PublicHost   string `env:"CP_USER_S3_PUBLIC_HOST"`
+	UserS3PublicUseSSL bool   `env:"CP_USER_S3_PUBLIC_USE_SSL" envDefault:"false"`
 }
 
 type BuildService struct {

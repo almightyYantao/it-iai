@@ -205,16 +205,54 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 		}
 		if m.Needs.Redis && r.srv.redisProv.Enabled() {
 			if _, have := dbEnv["REDIS_URL"]; !have {
-				url, perr := r.srv.redisProv.Provision(ctx, slug)
+				_, _ = r.srv.store.AppendEvent(ctx, p.ID, "deploy", "info", "provisioning Redis ACL user")
+				creds, perr := r.srv.redisProv.Provision(ctx, slug)
 				if perr != nil {
 					r.fail(ctx, p.ID, "provision_redis", perr.Error())
 					return
 				}
-				if err := r.srv.store.SetProjectEnv(ctx, p.ProjectID, "REDIS_URL", url, true, r.srv.kek, nil); err != nil {
+				// Two env vars: REDIS_URL (full DSN with per-project user)
+				// + REDIS_KEY_PREFIX (the prefix the ACL restricts to). Apps
+				// that don't use the prefix get NOPERM on the first write —
+				// fast failure beats silent cross-project bleed.
+				if err := r.srv.store.SetProjectEnv(ctx, p.ProjectID, "REDIS_URL", creds.URL, true, r.srv.kek, nil); err != nil {
 					r.fail(ctx, p.ID, "store_redis_url", err.Error())
 					return
 				}
-				dbEnv["REDIS_URL"] = url
+				if err := r.srv.store.SetProjectEnv(ctx, p.ProjectID, "REDIS_KEY_PREFIX", creds.KeyPrefix, true, r.srv.kek, nil); err != nil {
+					r.fail(ctx, p.ID, "store_redis_prefix", err.Error())
+					return
+				}
+				dbEnv["REDIS_URL"] = creds.URL
+				dbEnv["REDIS_KEY_PREFIX"] = creds.KeyPrefix
+			}
+		}
+		if m.Needs.S3 && r.srv.s3Prov.Enabled() {
+			if _, have := dbEnv["S3_ACCESS_KEY_ID"]; !have {
+				_, _ = r.srv.store.AppendEvent(ctx, p.ID, "deploy", "info", "provisioning S3 bucket + IAM user")
+				creds, perr := r.srv.s3Prov.Provision(ctx, slug)
+				if perr != nil {
+					r.fail(ctx, p.ID, "provision_s3", perr.Error())
+					return
+				}
+				useSSL := "false"
+				if creds.UseSSL {
+					useSSL = "true"
+				}
+				for k, v := range map[string]string{
+					"S3_ENDPOINT":          creds.Endpoint,
+					"S3_REGION":            creds.Region,
+					"S3_ACCESS_KEY_ID":     creds.AccessKeyID,
+					"S3_SECRET_ACCESS_KEY": creds.SecretAccessKey,
+					"S3_BUCKET":            creds.Bucket,
+					"S3_USE_SSL":           useSSL,
+				} {
+					if err := r.srv.store.SetProjectEnv(ctx, p.ProjectID, k, v, true, r.srv.kek, nil); err != nil {
+						r.fail(ctx, p.ID, "store_s3_env", err.Error())
+						return
+					}
+					dbEnv[k] = v
+				}
 			}
 		}
 

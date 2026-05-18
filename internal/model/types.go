@@ -53,6 +53,11 @@ type Manifest struct {
 type Needs struct {
 	Postgres bool `json:"postgres,omitempty"`
 	Redis    bool `json:"redis,omitempty"`
+	// S3 → the platform auto-creates a private bucket on the shared MinIO and
+	// hands the project an isolated access-key pair scoped to it. Injected env
+	// vars: S3_ENDPOINT / S3_REGION / S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY /
+	// S3_BUCKET / S3_USE_SSL.
+	S3 bool `json:"s3,omitempty"`
 }
 
 type Resources struct {

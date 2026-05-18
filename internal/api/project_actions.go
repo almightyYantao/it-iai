@@ -268,7 +268,20 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if s.redisProv.Enabled() {
-		_ = s.redisProv.Deprovision(ctx, p.Slug) // no-op for shared instance
+		if err := s.redisProv.Deprovision(ctx, p.Slug); err != nil {
+			s.store.WriteAudit(ctx, "system", "delete-cleanup", "project.delete.redis_failed",
+				&p.ID, map[string]string{"error": err.Error()})
+		}
+	}
+	if s.s3Prov.Enabled() {
+		// S3 deprovision drops the user + policy but intentionally leaves the
+		// bucket — see provision/s3.go. Operators clean it up manually after
+		// confirming the project is truly gone (an `mc rb --force` undoes
+		// possibly years of stored objects).
+		if err := s.s3Prov.Deprovision(ctx, p.Slug); err != nil {
+			s.store.WriteAudit(ctx, "system", "delete-cleanup", "project.delete.s3_failed",
+				&p.ID, map[string]string{"error": err.Error()})
+		}
 	}
 	// Clear encrypted env so we don't keep secrets attached to a tombstoned
 	// project row. Best-effort — soft-delete should still succeed even if

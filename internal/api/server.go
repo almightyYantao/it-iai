@@ -29,10 +29,11 @@ type Server struct {
 	deployer *k8sdriver.Deployer
 	bus      *events.Bus
 	runtime  *config.Runtime
-	// Optional sidecar provisioners. Either may be nil/disabled — the
+	// Optional sidecar provisioners. Each one may be nil/disabled — the
 	// reconciler checks Enabled() before honouring manifest.needs.*.
 	pgProv    *provision.PostgresProvisioner
 	redisProv *provision.RedisProvisioner
+	s3Prov    *provision.S3Provisioner
 }
 
 func NewServer(cfg config.ControlPlane, s *store.Store, jwt *auth.JWTVerifier, kek *auth.KEK, obj *storage.Client, dep *k8sdriver.Deployer, bus *events.Bus, rt *config.Runtime) *Server {
@@ -41,7 +42,15 @@ func NewServer(cfg config.ControlPlane, s *store.Store, jwt *auth.JWTVerifier, k
 		// Provisioners are nil when the corresponding env vars are empty —
 		// platform won't try to auto-create DBs / Redis URLs.
 		pgProv:    provision.NewPostgresProvisioner(cfg.UserPGAdminURL, cfg.UserPGPublicHost),
-		redisProv: provision.NewRedisProvisioner(cfg.UserRedisURLTemplate),
+		redisProv: provision.NewRedisProvisioner(cfg.UserRedisAdminURL, cfg.UserRedisPublicHost),
+		// S3 reuses the platform's MinIO admin creds (same instance, namespaced
+		// per project). UserS3PublicHost can differ from the admin endpoint
+		// when pods need a routable IP instead of the compose service name.
+		s3Prov: provision.NewS3Provisioner(
+			cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey,
+			cfg.UserS3PublicHost, cfg.S3Region,
+			cfg.S3UseSSL, cfg.UserS3PublicUseSSL,
+		),
 	}
 	srv.jwtPtr.Store(jwt)
 	return srv
