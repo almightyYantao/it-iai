@@ -45,6 +45,7 @@ claude                # 在 Claude Code 里说一句话
 - 🎯 **IP 白名单** — 全局命名预设（管理员维护）+ 项目自定义
 - 🪪 **自定义子域** — `my-app.example.com` 而不是随机字符
 - 🗄️ **自动开通数据库** — manifest 写 `postgres = true`，平台自动建库 + 注入 `DATABASE_URL`，业务无需申请
+- 🪶 **SQLite 不丢数据** — Litestream sidecar 把 `/data/app.db` 实时同步到 S3；pod 重启 / 节点漂移自动从 S3 恢复
 - 🔑 **加密环境变量** — Web 后台改密钥（KEK 加密落 DB），部署时自动注入到 pod，源码里不留明文
 - 🤝 **协作者管理** — 邀请同事共同维护
 - 📊 **实时日志** — SSE 流，构建过程一行一行打出来
@@ -147,6 +148,7 @@ manifest 里声明 `postgres = true` / `redis = true` / `s3 = true`，平台部�
 | **PostgreSQL** | `user-postgres` 容器（独立 PG，跟控制面 DB 分开） | 独立 database `proj_<slug>` + 独立 role + 随机密码 | SQL 层：`GRANT` 只到自家 DB，跨项目 `\c` 都不行 |
 | **Redis** | 共享 `redis` 容器（Redis 6 ACL） | ACL 用户 `proj-<slug>` + 限制 key 前缀 `~proj-<slug>:*` + 禁 `@dangerous` | ACL 层：写非前缀 key 直接 `NOPERM` |
 | **MinIO / S3** | 共享 `minio` 容器（复用平台底座） | 独立 bucket `proj-<slug>` + 独立 IAM 用户 + bucket-only policy | IAM 层：policy 锁死，列别人 bucket 直接 403 |
+| **SQLite** | 共享 MinIO 做 Litestream 复制目标（无单独底座） | pod 内 emptyDir `/data` + Litestream sidecar + init 容器从 S3 恢复 | 每项目自家 bucket 存 WAL；天然隔离（沿用 S3 的 IAM 隔离） |
 
 注入到 pod 的环境变量：
 
@@ -160,6 +162,7 @@ S3_ACCESS_KEY_ID         # proj-<slug>
 S3_SECRET_ACCESS_KEY     # ****
 S3_BUCKET                # proj-<slug>
 S3_USE_SSL               # false
+SQLITE_PATH              # /data/app.db    (仅当 needs.sqlite=true)
 ```
 
 值在数据库里用 KEK 加密落地，部署时解密注入到 K8s Secret，pod 里读 `os.environ["DATABASE_URL"]` 就能用。

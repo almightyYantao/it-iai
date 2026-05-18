@@ -41,21 +41,28 @@ vd_preflight "$manifest"
 # data-migration script and not actually need a DB at runtime. Surface the
 # detection and let the user opt out before we commit to provisioning.
 # Non-TTY (CI, piped Claude tool call) accepts the detection as-is.
-needs_pg=$(echo "$manifest" | jq -r '.needs.postgres // false')
-needs_redis=$(echo "$manifest" | jq -r '.needs.redis // false')
-needs_s3=$(echo "$manifest" | jq -r '.needs.s3 // false')
+needs_pg=$(echo "$manifest"     | jq -r '.needs.postgres // false')
+needs_redis=$(echo "$manifest"  | jq -r '.needs.redis    // false')
+needs_s3=$(echo "$manifest"     | jq -r '.needs.s3       // false')
+needs_sqlite=$(echo "$manifest" | jq -r '.needs.sqlite   // false')
 
-if [[ "$needs_pg" == "true" || "$needs_redis" == "true" || "$needs_s3" == "true" ]]; then
+if [[ "$needs_pg" == "true" || "$needs_redis" == "true" || "$needs_s3" == "true" || "$needs_sqlite" == "true" ]]; then
   vd_info "检测到依赖："
-  [[ "$needs_pg"    == "true" ]] && vd_info "  PostgreSQL ✓（自动开独立 DB；注入 DATABASE_URL）"
-  [[ "$needs_redis" == "true" ]] && vd_info "  Redis ✓（自动开 ACL 用户 + 独立 key 前缀；注入 REDIS_URL / REDIS_KEY_PREFIX）"
-  [[ "$needs_s3"    == "true" ]] && vd_info "  S3 ✓（自动开独立 bucket + IAM user；注入 S3_ENDPOINT / S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY / S3_BUCKET 等）"
+  [[ "$needs_pg"     == "true" ]] && vd_info "  PostgreSQL ✓（自动开独立 DB；注入 DATABASE_URL）"
+  [[ "$needs_redis"  == "true" ]] && vd_info "  Redis ✓（自动开 ACL 用户 + 独立 key 前缀；注入 REDIS_URL / REDIS_KEY_PREFIX）"
+  [[ "$needs_s3"     == "true" ]] && vd_info "  S3 ✓（自动开独立 bucket + IAM user；注入 S3_ENDPOINT / S3_ACCESS_KEY_ID 等）"
+  if [[ "$needs_sqlite" == "true" ]]; then
+    vd_info "  SQLite ✓（Litestream 持续把 /data/app.db 同步到 S3；pod 重启/漂移都不丢数据）"
+    vd_warn "    ⚠️  你的代码必须把 DB 路径改成读环境变量 SQLITE_PATH（默认 /data/app.db）"
+    vd_warn "    例：path = os.environ.get('SQLITE_PATH', './app.db')"
+    vd_warn "    Claude 可以帮你改：跟它说「把 SQLite 路径改成读 SQLITE_PATH 环境变量」"
+  fi
 
   if [[ -t 0 ]]; then
     printf '\033[36m?\033[0m 用平台自动开通这些服务？回车 = 是；输入 n = 跳过（你自己注入连接串） [Y/n]: ' >&2
     read -r ans || true
     if [[ "$ans" =~ ^[nN] ]]; then
-      manifest=$(echo "$manifest" | jq '.needs.postgres = false | .needs.redis = false | .needs.s3 = false')
+      manifest=$(echo "$manifest" | jq '.needs.postgres = false | .needs.redis = false | .needs.s3 = false | .needs.sqlite = false')
       vd_info "已跳过自动开通——记得自己在项目详情页填环境变量（或在 .vibedeploy.toml 里写 env）"
     fi
   fi

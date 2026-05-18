@@ -74,6 +74,46 @@ type ApplyInput struct {
 	Env      map[string]string // user env + injected
 	CPU      string
 	Memory   string
+	// SQLite enables the Litestream pattern: emptyDir /data shared with a
+	// sidecar that continuously replicates /data/app.db to the project's
+	// S3 bucket. An init container restores from S3 on pod start. Requires
+	// the S3_* env vars to be set (caller enforces this — usually because
+	// Needs.S3 was true alongside Needs.SQLite).
+	SQLite bool
+}
+
+// Litestream defaults — kept as package-level constants so the init / sidecar
+// container helpers and the env injection in the reconciler stay aligned.
+const (
+	litestreamImage    = "litestream/litestream:0.3.13"
+	sqliteVolumeName   = "sqlite-data"
+	sqliteMountPath    = "/data"
+	sqliteDefaultDB    = "/data/app.db"
+	sqliteS3ObjectKey  = "app.db" // path under the project's S3 bucket
+)
+
+// litestreamScript builds a small shell snippet that:
+//   * generates a one-off config at /tmp/lc.yml from the S3_* env vars
+//     already present in the pod (injected from project_env)
+//   * exec's the supplied litestream subcommand
+// Inline config keeps us from having to manage a ConfigMap per project.
+func litestreamScript(subcommand string) string {
+	return `set -eu
+SCHEME=http
+[ "${S3_USE_SSL:-false}" = "true" ] && SCHEME=https
+cat > /tmp/lc.yml <<EOF
+dbs:
+  - path: ` + sqliteDefaultDB + `
+    replicas:
+      - type: s3
+        bucket: ${S3_BUCKET}
+        path: ` + sqliteS3ObjectKey + `
+        endpoint: ${SCHEME}://${S3_ENDPOINT}
+        access-key-id: ${S3_ACCESS_KEY_ID}
+        secret-access-key: ${S3_SECRET_ACCESS_KEY}
+        force-path-style: true
+EOF
+exec ` + subcommand
 }
 
 func (d *Deployer) namespaceFor(slug string) string { return "proj-" + slug }
@@ -182,6 +222,100 @@ func (d *Deployer) applyDeployment(ctx context.Context, in ApplyInput) error {
 		mem = "2Gi"
 	}
 
+	appContainer := corev1.Container{
+		Name:  "app",
+		Image: image,
+		Ports: []corev1.ContainerPort{{ContainerPort: int32(in.Port)}},
+		EnvFrom: []corev1.EnvFromSource{
+			{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "app-env"}}},
+		},
+		Env: []corev1.EnvVar{
+			{Name: "PORT", Value: fmt.Sprintf("%d", in.Port)},
+			{Name: "VIBEDEPLOY_PROJECT", Value: in.Slug},
+			{Name: "VIBEDEPLOY_URL", Value: fmt.Sprintf("https://%s.%s", in.Slug, d.baseDomain)},
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("200Mi"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse(cpu),
+				corev1.ResourceMemory: resource.MustParse(mem),
+			},
+		},
+		ReadinessProbe: &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(in.Port)},
+			},
+			InitialDelaySeconds: 2,
+			PeriodSeconds:       3,
+			FailureThreshold:    20,
+		},
+	}
+
+	podSpec := corev1.PodSpec{
+		Containers: []corev1.Container{appContainer},
+	}
+
+	// SQLite + Litestream wiring. When the manifest says needs.sqlite, the
+	// pod gets:
+	//   * an emptyDir volume at /data shared between init / app / sidecar
+	//   * an init container that restores /data/app.db from S3 (no-op on
+	//     first deploy, populates on subsequent restarts / node drains)
+	//   * a sidecar that runs `litestream replicate` against the same DB
+	// All three containers reuse the app-env Secret so the S3 creds the
+	// reconciler wrote there flow straight through.
+	if in.SQLite {
+		podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+			Name:         sqliteVolumeName,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		})
+		mount := corev1.VolumeMount{Name: sqliteVolumeName, MountPath: sqliteMountPath}
+
+		// Append the mount + SQLITE_PATH env to the app container.
+		podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, mount)
+		podSpec.Containers[0].Env = append(podSpec.Containers[0].Env, corev1.EnvVar{
+			Name:  "SQLITE_PATH",
+			Value: sqliteDefaultDB,
+		})
+
+		// Init container: restore from S3 if a previous replica exists.
+		// `-if-replica-exists` makes the very first deploy (empty bucket) a no-op.
+		podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
+			Name:  "litestream-restore",
+			Image: litestreamImage,
+			EnvFrom: []corev1.EnvFromSource{
+				{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "app-env"}}},
+			},
+			Command:      []string{"/bin/sh", "-c"},
+			Args:         []string{litestreamScript("litestream restore -if-replica-exists -config /tmp/lc.yml " + sqliteDefaultDB)},
+			VolumeMounts: []corev1.VolumeMount{mount},
+		})
+
+		// Sidecar: continuous replication while the app is running.
+		podSpec.Containers = append(podSpec.Containers, corev1.Container{
+			Name:  "litestream",
+			Image: litestreamImage,
+			EnvFrom: []corev1.EnvFromSource{
+				{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "app-env"}}},
+			},
+			Command:      []string{"/bin/sh", "-c"},
+			Args:         []string{litestreamScript("litestream replicate -config /tmp/lc.yml")},
+			VolumeMounts: []corev1.VolumeMount{mount},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("20m"),
+					corev1.ResourceMemory: resource.MustParse("32Mi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("200m"),
+					corev1.ResourceMemory: resource.MustParse("128Mi"),
+				},
+			},
+		})
+	}
+
 	replicas := int32(1)
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, Labels: appLabels(in.Slug)},
@@ -191,41 +325,7 @@ func (d *Deployer) applyDeployment(ctx context.Context, in ApplyInput) error {
 			Strategy: appsv1.DeploymentStrategy{Type: appsv1.RollingUpdateDeploymentStrategyType},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: appLabels(in.Slug)},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "app",
-							Image: image,
-							Ports: []corev1.ContainerPort{{ContainerPort: int32(in.Port)}},
-							EnvFrom: []corev1.EnvFromSource{
-								{SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "app-env"}}},
-							},
-							Env: []corev1.EnvVar{
-								{Name: "PORT", Value: fmt.Sprintf("%d", in.Port)},
-								{Name: "VIBEDEPLOY_PROJECT", Value: in.Slug},
-								{Name: "VIBEDEPLOY_URL", Value: fmt.Sprintf("https://%s.%s", in.Slug, d.baseDomain)},
-							},
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("100m"),
-									corev1.ResourceMemory: resource.MustParse("200Mi"),
-								},
-								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse(cpu),
-									corev1.ResourceMemory: resource.MustParse(mem),
-								},
-							},
-							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(in.Port)},
-								},
-								InitialDelaySeconds: 2,
-								PeriodSeconds:       3,
-								FailureThreshold:    20,
-							},
-						},
-					},
-				},
+				Spec:       podSpec,
 			},
 		},
 	}

@@ -1,4 +1,4 @@
-<svg viewBox="0 0 1400 880" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="iai per-project data isolation">
+<svg viewBox="0 0 1400 1130" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="iai per-project data isolation">
   <defs>
     <style>
       .title       { font: 700 22px ui-sans-serif, system-ui, sans-serif; fill: #0F766E; letter-spacing: 1.4px; text-transform: uppercase; }
@@ -26,7 +26,7 @@
     </marker>
   </defs>
 
-  <rect width="1400" height="880" fill="#FAFAF9"/>
+  <rect width="1400" height="1130" fill="#FAFAF9"/>
 
   <text x="60" y="46" class="title">Per-project data isolation</text>
   <text x="60" y="70" class="legend">
@@ -200,10 +200,66 @@
     </g>
   </g>
 
+  <!-- ============================== ROW 4: SQLITE / LITESTREAM ============================== -->
+  <g transform="translate(0, 860)">
+    <text class="row-label" x="60" y="0">④ SQLite  ·  Litestream sidecar</text>
+    <text class="row-sub"   x="60" y="22">每项目 pod 内挂 emptyDir + sidecar 持续把 /data/app.db 增量同步到自家 MinIO bucket</text>
+
+    <!-- Shared instance = same MinIO -->
+    <rect class="shared-fill shared-stroke" x="60" y="42" width="240" height="160" rx="10"/>
+    <text class="shared-title" x="78" y="68">litestream (sidecar)</text>
+    <text class="shared-sub"   x="78" y="88">litestream:0.3.13</text>
+    <text class="shared-sub"   x="78" y="104">backing: 复用 minio</text>
+    <text class="shared-sub"   x="78" y="120">object: app.db</text>
+    <line x1="78" y1="132" x2="282" y2="132" stroke="#CBD5E1" stroke-width="1"/>
+    <text class="shared-sub"   x="78" y="150" fill="#0F766E">+ 每 pod 派生:</text>
+    <text class="shared-sub"   x="78" y="166">  - emptyDir /data</text>
+    <text class="shared-sub"   x="78" y="180">  - init: restore</text>
+    <text class="shared-sub"   x="78" y="194">  - sidecar: replicate</text>
+
+    <!-- Per-project slices -->
+    <g transform="translate(380, 42)">
+      <rect class="slice-fill slice-stroke" x="0"   y="0"  width="180" height="160" rx="8"/>
+      <text class="slice-name" x="14" y="22">proj-app1</text>
+      <text class="slice-sub"  x="14" y="42">SQLITE_PATH=</text>
+      <text class="slice-sub"  x="14" y="60">  /data/app.db</text>
+      <text class="slice-sub"  x="14" y="78">→ proj-app1/app.db</text>
+      <line x1="14" y1="90" x2="166" y2="90" stroke="#CBD5E1"/>
+      <text class="slice-sub"  x="14" y="108" fill="#155E75">隔离方式：</text>
+      <text class="slice-sub"  x="14" y="126">复用 ③ 的 bucket</text>
+      <text class="slice-sub"  x="14" y="142">IAM 隔离</text>
+
+      <rect class="slice-fill slice-stroke" x="200" y="0"  width="180" height="160" rx="8"/>
+      <text class="slice-name" x="214" y="22">proj-app2</text>
+      <text class="slice-sub"  x="214" y="42">SQLITE_PATH=</text>
+      <text class="slice-sub"  x="214" y="60">  /data/app.db</text>
+      <text class="slice-sub"  x="214" y="78">→ proj-app2/app.db</text>
+      <line x1="214" y1="90" x2="366" y2="90" stroke="#CBD5E1"/>
+      <text class="slice-sub"  x="214" y="108" fill="#155E75">隔离方式：</text>
+      <text class="slice-sub"  x="214" y="126">复用 ③ 的 bucket</text>
+      <text class="slice-sub"  x="214" y="142">IAM 隔离</text>
+
+      <rect class="slice-fill slice-stroke" x="400" y="0"  width="180" height="160" rx="8"/>
+      <text class="slice-name" x="414" y="22">proj-app3</text>
+      <text class="slice-sub"  x="414" y="42">SQLITE_PATH=</text>
+      <text class="slice-sub"  x="414" y="60">  /data/app.db</text>
+      <text class="slice-sub"  x="414" y="78">→ proj-app3/app.db</text>
+      <line x1="414" y1="90" x2="566" y2="90" stroke="#CBD5E1"/>
+      <text class="slice-sub"  x="414" y="108" fill="#155E75">隔离方式：</text>
+      <text class="slice-sub"  x="414" y="126">复用 ③ 的 bucket</text>
+      <text class="slice-sub"  x="414" y="142">IAM 隔离</text>
+    </g>
+
+    <g transform="translate(1000, 100)">
+      <rect class="iso-tag" x="0" y="0" width="340" height="44" rx="22"/>
+      <text class="iso" x="20" y="28">不丢数据  ·  pod 重启/漂移自动 restore</text>
+    </g>
+  </g>
+
   <!-- ============================== FOOTER: env vars handed to a pod ============================== -->
-  <g transform="translate(60, 810)">
+  <g transform="translate(60, 1060)">
     <rect class="env-fill env-stroke" x="0" y="0" width="1280" height="50" rx="10"/>
     <text class="env-title" x="20" y="22">控制面在 reconcile 时把这些 env 加密注入到 pod（K8s Secret）：</text>
-    <text class="env-line"  x="20" y="42">DATABASE_URL · REDIS_URL · REDIS_KEY_PREFIX · S3_ENDPOINT · S3_REGION · S3_ACCESS_KEY_ID · S3_SECRET_ACCESS_KEY · S3_BUCKET · S3_USE_SSL</text>
+    <text class="env-line"  x="20" y="42">DATABASE_URL · REDIS_URL · REDIS_KEY_PREFIX · S3_ENDPOINT · S3_REGION · S3_ACCESS_KEY_ID · S3_SECRET_ACCESS_KEY · S3_BUCKET · S3_USE_SSL · SQLITE_PATH</text>
   </g>
 </svg>

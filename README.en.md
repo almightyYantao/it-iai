@@ -45,6 +45,7 @@ Turn internal tools / demos / AI agents from "runs only on my laptop" into "a UR
 - 🎯 **IP allow-list** — globally-named presets (admin-curated) + per-project custom
 - 🪪 **Vanity subdomain** — `my-app.example.com` instead of random chars
 - 🗄️ **Auto-provisioned databases** — `postgres = true` in the manifest → platform creates a DB and injects `DATABASE_URL`; users don't have to file tickets
+- 🪶 **SQLite never loses data** — a Litestream sidecar streams `/data/app.db` to S3 in real time; pod restarts / node migrations auto-restore from S3
 - 🔑 **Encrypted env vars** — edit secrets in the admin UI (KEK-encrypted at rest), auto-injected into the pod; nothing in the user's git
 - 🤝 **Collaborators** — invite teammates to co-maintain
 - 📊 **Live logs** — SSE stream, build output line by line
@@ -156,6 +157,7 @@ Declare `postgres = true` / `redis = true` / `s3 = true` in the manifest and the
 | **PostgreSQL** | `user-postgres` container (separate from the control-plane DB) | Own database `proj_<slug>` + own role + random password | SQL: `GRANT` to own DB only — can't even `\c` siblings |
 | **Redis** | Shared `redis` container (Redis 6 ACL) | ACL user `proj-<slug>` + key pattern `~proj-<slug>:*` + `-@dangerous` | ACL: writing a non-prefixed key returns `NOPERM` |
 | **MinIO / S3** | Shared `minio` container (reuses platform storage) | Own bucket `proj-<slug>` + own IAM user + bucket-only policy | IAM: policy scoped — listing siblings returns 403 |
+| **SQLite** | Shared MinIO as the Litestream replication target (no separate backbone) | emptyDir `/data` in the pod + Litestream sidecar + init container that restores from S3 | Each project's WAL lives in its own bucket; inherits the S3 IAM isolation |
 
 Env vars injected into the pod:
 
@@ -169,6 +171,7 @@ S3_ACCESS_KEY_ID         # proj-<slug>
 S3_SECRET_ACCESS_KEY     # ****
 S3_BUCKET                # proj-<slug>
 S3_USE_SSL               # false
+SQLITE_PATH              # /data/app.db    (only when needs.sqlite=true)
 ```
 
 Values are KEK-encrypted at rest in the platform DB, decrypted at deploy time, and dropped into a K8s Secret — the pod just reads `os.environ["DATABASE_URL"]`.

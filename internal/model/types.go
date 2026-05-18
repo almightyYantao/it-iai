@@ -58,6 +58,13 @@ type Needs struct {
 	// vars: S3_ENDPOINT / S3_REGION / S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY /
 	// S3_BUCKET / S3_USE_SSL.
 	S3 bool `json:"s3,omitempty"`
+	// SQLite → the pod gets an emptyDir at /data + a Litestream sidecar that
+	// replicates /data/app.db to the project's S3 bucket continuously. An init
+	// container restores from S3 on pod start. Implies Needs.S3 (replication
+	// target). Injected env: SQLITE_PATH=/data/app.db. App must honour
+	// SQLITE_PATH (or default it to /data/app.db) or its data won't be
+	// replicated.
+	SQLite bool `json:"sqlite,omitempty"`
 }
 
 type Resources struct {

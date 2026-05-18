@@ -227,7 +227,10 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 				dbEnv["REDIS_KEY_PREFIX"] = creds.KeyPrefix
 			}
 		}
-		if m.Needs.S3 && r.srv.s3Prov.Enabled() {
+		// SQLite implies S3 — Litestream replicates to the project's bucket,
+		// so credentials must be in project_env before the pod starts.
+		needS3 := m.Needs.S3 || m.Needs.SQLite
+		if needS3 && r.srv.s3Prov.Enabled() {
 			if _, have := dbEnv["S3_ACCESS_KEY_ID"]; !have {
 				_, _ = r.srv.store.AppendEvent(ctx, p.ID, "deploy", "info", "provisioning S3 bucket + IAM user")
 				creds, perr := r.srv.s3Prov.Provision(ctx, slug)
@@ -271,6 +274,7 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 			Env:    envs,
 			CPU:    m.Resources.CPU,
 			Memory: m.Resources.Memory,
+			SQLite: m.Needs.SQLite,
 		}); err != nil {
 			r.fail(ctx, p.ID, "k8s_apply", err.Error())
 			return

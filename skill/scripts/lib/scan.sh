@@ -13,7 +13,7 @@ vd_scan_manifest() {
   local dir="${1:-.}"
   cd "$dir"
 
-  local name port build="" start="" lang="" needs_pg=false needs_redis=false needs_s3=false
+  local name port build="" start="" lang="" needs_pg=false needs_redis=false needs_s3=false needs_sqlite=false
   local port_explicit=false
 
   # 1) explicit override from .vibedeploy.toml
@@ -30,6 +30,7 @@ vd_scan_manifest() {
     grep -qE '^postgres *= *true' .vibedeploy.toml && needs_pg=true
     grep -qE '^redis *= *true'    .vibedeploy.toml && needs_redis=true
     grep -qE '^s3 *= *true'       .vibedeploy.toml && needs_s3=true
+    grep -qE '^sqlite *= *true'   .vibedeploy.toml && needs_sqlite=true
     if [[ -n "$toml_port" ]]; then
       port=$toml_port
       port_explicit=true
@@ -48,6 +49,7 @@ vd_scan_manifest() {
     grep -qE '"(pg|prisma|sequelize|typeorm|knex|drizzle-orm)"' package.json && needs_pg=true
     grep -qE '"(ioredis|redis)"' package.json && needs_redis=true
     grep -qE '"(@aws-sdk/client-s3|aws-sdk|minio|@minio/minio)"' package.json && needs_s3=true
+    grep -qE '"(better-sqlite3|sqlite3|@vscode/sqlite3)"' package.json && needs_sqlite=true
     : "${port:=3000}"
   elif [[ -f requirements.txt || -f pyproject.toml ]]; then
     lang="python"
@@ -62,6 +64,7 @@ vd_scan_manifest() {
     grep -qiE 'psycopg|sqlalchemy|asyncpg|django' requirements.txt pyproject.toml 2>/dev/null && needs_pg=true
     grep -qiE 'redis'                              requirements.txt pyproject.toml 2>/dev/null && needs_redis=true
     grep -qiE 'boto3|aioboto3|minio'               requirements.txt pyproject.toml 2>/dev/null && needs_s3=true
+    grep -qiE 'aiosqlite|sqlite-utils'              requirements.txt pyproject.toml 2>/dev/null && needs_sqlite=true
 
     # Framework-aware default port. Flask=5000, FastAPI/Django=8000.
     if [[ -z "${port:-}" ]]; then
@@ -90,6 +93,26 @@ vd_scan_manifest() {
     : "${port:=$_VD_DEFAULT_PORT}"
   fi
 
+  # File-based heuristic for SQLite: a tracked *.db / *.sqlite{,3} in the
+  # repo is a strong signal that the app reads/writes it at runtime, even
+  # when no SDK shows up in deps (Python's stdlib `sqlite3` doesn't appear
+  # in requirements.txt). Stop at first match — one is enough.
+  if ! $needs_sqlite && \
+     find . -maxdepth 4 -type f \
+       \( -name '*.db' -o -name '*.sqlite' -o -name '*.sqlite3' \) \
+       -not -path '*/node_modules/*' \
+       -not -path '*/.venv/*' \
+       -print -quit 2>/dev/null | grep -q .; then
+    needs_sqlite=true
+  fi
+
+  # Litestream replicates the SQLite file to S3, so a SQLite project always
+  # needs an S3 bucket. Force it on whenever sqlite is set — caller doesn't
+  # have to know about the dependency.
+  if $needs_sqlite; then
+    needs_s3=true
+  fi
+
   # Warn when we fell back to a default (helps users notice when they should pin it).
   if [[ "$port_explicit" != "true" ]]; then
     printf '\033[33m!\033[0m using default port %s — set `port = N` in .vibedeploy.toml to pin\n' "$port" >&2
@@ -104,13 +127,14 @@ vd_scan_manifest() {
     --argjson port "$port" \
     --argjson postgres "$needs_pg" \
     --argjson redis    "$needs_redis" \
-    --argjson s3       "$needs_s3" '
+    --argjson s3       "$needs_s3" \
+    --argjson sqlite   "$needs_sqlite" '
   {
     name: $name,
     language: $lang,
     port: $port,
     build: ($build // ""),
     start: ($start // ""),
-    needs: { postgres: $postgres, redis: $redis, s3: $s3 }
+    needs: { postgres: $postgres, redis: $redis, s3: $s3, sqlite: $sqlite }
   }'
 }
