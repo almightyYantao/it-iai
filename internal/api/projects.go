@@ -172,7 +172,12 @@ func (s *Server) actorUserID(ctx context.Context, a Actor) (uuid.UUID, error) {
 	if a.Kind == actorUser {
 		return a.UserID, nil
 	}
-	// Synthesise a placeholder owner for deploy-token created projects.
+	// Token actor: attribute to the user who issued the token.
+	if a.TokenCreatedBy != nil {
+		return *a.TokenCreatedBy, nil
+	}
+	// Bootstrap / legacy token without a creator — fall back to a synthetic
+	// placeholder so the FK still resolves.
 	u, err := s.store.UpsertUserByEmail(ctx, "platform@vibedeploy.local", "platform")
 	if err != nil {
 		return uuid.Nil, err

@@ -29,6 +29,9 @@ type Actor struct {
 	TokenScopes []string
 	// When set, the token can only operate on this project.
 	TokenProjectID *uuid.UUID
+	// The user who issued this token. Used to attribute project ownership
+	// when a project is created via deploy token rather than a browser session.
+	TokenCreatedBy *uuid.UUID
 	AllowDB        bool
 }
 
@@ -114,6 +117,7 @@ func (s *Server) verifyDeployToken(ctx context.Context, tok string) (Actor, erro
 		TokenID:        rec.ID,
 		TokenScopes:    rec.Scopes,
 		TokenProjectID: rec.ProjectID,
+		TokenCreatedBy: rec.CreatedBy,
 		AllowDB:        rec.AllowDB,
 	}, nil
 }
