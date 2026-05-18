@@ -44,6 +44,8 @@ claude                # 在 Claude Code 里说一句话
 - 🌐 **HTTPS + 通配证书** — 自带 TLS，自动 80→443 跳转
 - 🎯 **IP 白名单** — 全局命名预设（管理员维护）+ 项目自定义
 - 🪪 **自定义子域** — `my-app.example.com` 而不是随机字符
+- 🗄️ **自动开通数据库** — manifest 写 `postgres = true`，平台自动建库 + 注入 `DATABASE_URL`，业务无需申请
+- 🔑 **加密环境变量** — Web 后台改密钥（KEK 加密落 DB），部署时自动注入到 pod，源码里不留明文
 - 🤝 **协作者管理** — 邀请同事共同维护
 - 📊 **实时日志** — SSE 流，构建过程一行一行打出来
 - 🔁 **健康自愈** — pod 挂了自动恢复，DB 状态自动校准
@@ -115,8 +117,8 @@ rm -rf ~/iai && git clone https://github.com/almightyYantao/it-iai.git ~/iai && 
  │ Code +   │        │ plane    │  │  MinIO   │           │ K3s agent  │
  │ Skill    │        ├──────────┤  │ Registry │           │            │
  └──────────┘        │ build-   │  │  Redis   │           │ user pods  │
-                     │ service  │  └──────────┘           │ (proj-xxx) │
-                     └──────────┘                          └────────────┘
+                     │ service  │  │ user-PG  │ ← 自动开  │ (proj-xxx) │
+                     └──────────┘  └──────────┘   给项目  └────────────┘
                           │                                       ▲
                           │       K3s server + Traefik            │
                           │       (DaemonSet, hostNetwork)        │

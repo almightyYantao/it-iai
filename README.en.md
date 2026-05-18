@@ -44,6 +44,8 @@ Turn internal tools / demos / AI agents from "runs only on my laptop" into "a UR
 - 🌐 **HTTPS + wildcard cert** — TLS built in, auto-redirect 80 → 443
 - 🎯 **IP allow-list** — globally-named presets (admin-curated) + per-project custom
 - 🪪 **Vanity subdomain** — `my-app.example.com` instead of random chars
+- 🗄️ **Auto-provisioned databases** — `postgres = true` in the manifest → platform creates a DB and injects `DATABASE_URL`; users don't have to file tickets
+- 🔑 **Encrypted env vars** — edit secrets in the admin UI (KEK-encrypted at rest), auto-injected into the pod; nothing in the user's git
 - 🤝 **Collaborators** — invite teammates to co-maintain
 - 📊 **Live logs** — SSE stream, build output line by line
 - 🔁 **Self-healing** — failed pods auto-recover, DB state auto-reconciled with cluster
@@ -124,8 +126,8 @@ See [the Usage Guide](docs/使用手册.md) for detailed walkthroughs.
  │ Code +   │        │ plane    │  │  MinIO   │           │ K3s agent  │
  │ Skill    │        ├──────────┤  │ Registry │           │            │
  └──────────┘        │ build-   │  │  Redis   │           │ user pods  │
-                     │ service  │  └──────────┘           │ (proj-xxx) │
-                     └──────────┘                          └────────────┘
+                     │ service  │  │ user-PG  │ ← auto-   │ (proj-xxx) │
+                     └──────────┘  └──────────┘  prov'd   └────────────┘
                           │                                       ▲
                           │       K3s server + Traefik            │
                           │       (DaemonSet, hostNetwork)        │
