@@ -1,0 +1,28 @@
+<svg viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg" fill="none" role="img" aria-label="iai logo">
+  <!-- Hex container — echoes the in-app BrandMark (icons.tsx) so the logo
+       reads as the same brand across docs + the running UI. -->
+  <path d="M120 24 L40 70 v100 l80 46 80-46 v-100 Z"
+        stroke="#0F766E"
+        stroke-width="10"
+        stroke-linejoin="round"
+        fill="#0F766E"
+        fill-opacity="0.06"/>
+
+  <!-- Top fold (front-facing triangle apex) -->
+  <path d="M40 70 L120 116 L200 70"
+        stroke="#0F766E"
+        stroke-width="10"
+        stroke-linejoin="round"/>
+
+  <!-- Vertical centre line — front edge, softened to feel less mechanical -->
+  <path d="M120 116 V216"
+        stroke="#0F766E"
+        stroke-width="10"
+        stroke-opacity="0.35"
+        stroke-linecap="round"/>
+
+  <!-- Heart accent on the top face — the "爱" hint without using literal text.
+       Sized so it reads at favicon (16×16) too. -->
+  <path d="M120 82 C113 70 96 73 96 88 C96 100 108 105 120 113 C132 105 144 100 144 88 C144 73 127 70 120 82 Z"
+        fill="#F59E0B"/>
+</svg>

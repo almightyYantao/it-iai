@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS deploy_tokens;
+DROP TABLE IF EXISTS project_env;
+DROP TABLE IF EXISTS deployment_events;
+DROP TABLE IF EXISTS deployments;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS users;

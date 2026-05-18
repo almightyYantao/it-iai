@@ -1,0 +1,7 @@
+name = "hello-node"
+port = 3000
+start = "node server.js"
+
+[needs]
+postgres = false
+redis = false

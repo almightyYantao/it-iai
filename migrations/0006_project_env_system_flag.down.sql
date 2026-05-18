@@ -1,0 +1,1 @@
+ALTER TABLE project_env DROP COLUMN IF EXISTS system;

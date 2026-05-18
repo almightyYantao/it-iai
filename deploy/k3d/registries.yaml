@@ -1,0 +1,10 @@
+# k3d mirror config so the cluster can pull from our docker-compose registry on host port 5001.
+# Use this hostname inside the cluster: host.k3d.internal:5001
+mirrors:
+  "host.k3d.internal:5001":
+    endpoint:
+      - "http://host.k3d.internal:5001"
+configs:
+  "host.k3d.internal:5001":
+    tls:
+      insecure_skip_verify: true

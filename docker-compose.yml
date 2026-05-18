@@ -1,0 +1,160 @@
+# VibeDeploy dev stack.
+# User apps are NOT run here — they are deployed to a k3d cluster that talks to this stack.
+# Bring up: docker compose up -d   then   make k3d-up   then   make seed
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vibedeploy
+      POSTGRES_PASSWORD: vibedeploy
+      POSTGRES_DB: vibedeploy
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vibedeploy"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  # user-postgres — a SEPARATE PG instance for auto-provisioned user-app
+  # databases. Kept separate from the control-plane PG so:
+  #   - user workloads can't lock / consume connections against the platform DB
+  #   - a single GRANT typo can't expose platform tables (audit log, tokens) to
+  #     a user pod
+  #   - backup / lifecycle policies can differ (user DBs are throwaway-ish)
+  # The host port (5433) is what user pods see in their DATABASE_URL; the
+  # internal name (user-postgres:5432) is what control-plane uses to CREATE
+  # DATABASE etc.
+  user-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${CP_USER_PG_ADMIN_USER:-iaiadmin}
+      POSTGRES_PASSWORD: ${CP_USER_PG_ADMIN_PASSWORD:-iaiadmin}
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - userpgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CP_USER_PG_ADMIN_USER:-iaiadmin}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2024-04-18T19-09-19Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: vibedeploy
+      MINIO_ROOT_PASSWORD: vibedeploypw
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-04-18T16-45-29Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "
+        mc alias set local http://minio:9000 vibedeploy vibedeploypw &&
+        mc mb -p local/vibedeploy-source || true &&
+        mc mb -p local/vibedeploy-buildcache || true &&
+        mc mb -p local/app-storage || true &&
+        echo 'buckets ready'
+      "
+
+  registry:
+    image: registry:2
+    restart: unless-stopped
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+    ports:
+      - "5001:5000"
+    volumes:
+      - registrydata:/var/lib/registry
+
+  control-plane:
+    build:
+      context: .
+      dockerfile: cmd/control-plane/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CP_KUBECONFIG: /kube/config
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    extra_hosts:
+      # Required on Linux so the container can reach the host's K3s API (Mac/Win get this for free).
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Isolated kubeconfig owned by this repo; populated by `make k3d-up`.
+      # On platform installs, install-platform.sh writes /root/.kube/config and you can
+      # bind that here instead (or symlink ./kube -> ~/.kube).
+      - ./kube:/kube:ro
+
+  build-service:
+    build:
+      context: .
+      dockerfile: cmd/build-service/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      registry:
+        condition: service_started
+    extra_hosts:
+      # `docker push` happens via the mounted host daemon, but BuildKit and nixpacks resolve hostnames
+      # from the container. host.docker.internal is the cleanest way to reach the host's :5001 registry.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # Build Service shells out to `nixpacks` (which uses docker buildx) and `docker push`.
+      # In M1 dev we mount the host docker socket so the container can drive the host docker daemon.
+      - /usr/libexec/docker/cli-plugins/docker-buildx:/usr/libexec/docker/cli-plugins/docker-buildx:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - buildworkdir:/var/lib/vibedeploy/build
+
+  web:
+    build:
+      context: ./web
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - control-plane
+
+volumes:
+  pgdata:
+  userpgdata:
+  miniodata:
+  registrydata:
+  buildworkdir:

@@ -1,0 +1,243 @@
+<svg viewBox="0 0 1600 920" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="iai architecture">
+  <defs>
+    <!-- Tinted neutral palette — chroma 0.005 toward the brand teal so
+         the diagram feels coherent with the rest of the brand without
+         shouting. -->
+    <style>
+      .col-label { font: 700 22px ui-sans-serif, system-ui, sans-serif; fill: #0F766E; letter-spacing: 1.6px; text-transform: uppercase; }
+      .col-zone  { fill: #F0FDFA; stroke: #14B8A6; stroke-opacity: 0.25; stroke-dasharray: 6 6; rx: 18; }
+      .box-stroke { stroke: #0F766E; stroke-width: 2; }
+      .box-fill   { fill: #ffffff; }
+      .box-title  { font: 600 18px ui-sans-serif, system-ui, sans-serif; fill: #134E4A; }
+      .box-sub    { font: 400 13px ui-monospace, SFMono-Regular, monospace; fill: #475569; }
+      .box-tag    { font: 600 11px ui-sans-serif, system-ui, sans-serif; fill: #0F766E; letter-spacing: 1.2px; text-transform: uppercase; }
+      .storage-fill   { fill: #F1F5F9; }
+      .storage-stroke { stroke: #94A3B8; stroke-width: 1.5; }
+      .storage-title  { font: 600 16px ui-sans-serif, system-ui, sans-serif; fill: #334155; }
+      .storage-sub    { font: 400 12px ui-monospace, monospace; fill: #64748B; }
+      .arrow-stroke   { stroke: #0F766E; stroke-width: 2; fill: none; }
+      .arrow-label    { font: 500 12px ui-sans-serif, system-ui, sans-serif; fill: #0F766E; }
+      .public-stroke  { stroke: #F59E0B; stroke-width: 2; fill: none; }
+      .public-label   { font: 500 12px ui-sans-serif, system-ui, sans-serif; fill: #B45309; }
+      .footer-text    { font: 400 12px ui-sans-serif, system-ui, sans-serif; fill: #64748B; }
+      .pod-fill       { fill: #ECFEFF; }
+      .pod-stroke     { stroke: #0891B2; stroke-width: 1.5; }
+      .pod-label      { font: 500 12px ui-monospace, monospace; fill: #155E75; }
+    </style>
+
+    <!-- Arrowheads -->
+    <marker id="arrow-teal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0F766E"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#F59E0B"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1600" height="920" fill="#FAFAF9"/>
+
+  <!-- ============================================================
+       Column zones — light dashed rounded rectangles behind each
+       section to give the eye structure.
+       ============================================================ -->
+  <rect class="col-zone" x="40"   y="80"  width="320" height="700"/>
+  <rect class="col-zone" x="400"  y="80"  width="780" height="700"/>
+  <rect class="col-zone" x="1220" y="80"  width="340" height="700"/>
+
+  <!-- Column labels -->
+  <text class="col-label" x="60"   y="64">开发者本机 · Developer</text>
+  <text class="col-label" x="420"  y="64">平台节点 · Platform node</text>
+  <text class="col-label" x="1240" y="64">Workers · K3s agents</text>
+
+  <!-- ============================================================
+       DEVELOPER COLUMN
+       ============================================================ -->
+  <g transform="translate(80, 320)">
+    <rect class="box-fill box-stroke" x="0" y="0" width="240" height="170" rx="14"/>
+    <text class="box-tag"   x="20" y="32">Skill</text>
+    <text class="box-title" x="20" y="62">Claude Code</text>
+    <text class="box-title" x="20" y="86">+ iai Skill</text>
+    <text class="box-sub"   x="20" y="120">scripts/push.sh</text>
+    <text class="box-sub"   x="20" y="138">scripts/status.sh</text>
+    <text class="box-sub"   x="20" y="156">scripts/logs.sh</text>
+  </g>
+
+  <!-- ============================================================
+       PLATFORM NODE COLUMN — three layers stacked
+       ============================================================ -->
+
+  <!-- Layer 1: control-plane API services -->
+  <g transform="translate(440, 130)">
+    <!-- control-plane -->
+    <rect class="box-fill box-stroke" x="0" y="0" width="220" height="120" rx="12"/>
+    <text class="box-tag"   x="18" y="26">Go API</text>
+    <text class="box-title" x="18" y="56">control-plane</text>
+    <text class="box-sub"   x="18" y="84">REST + SSE</text>
+    <text class="box-sub"   x="18" y="102">reconciler loops</text>
+
+    <!-- build-service -->
+    <rect class="box-fill box-stroke" x="250" y="0" width="220" height="120" rx="12"/>
+    <text class="box-tag"   x="268" y="26">Worker</text>
+    <text class="box-title" x="268" y="56">build-service</text>
+    <text class="box-sub"   x="268" y="84">nixpacks → docker</text>
+    <text class="box-sub"   x="268" y="102">push to registry</text>
+
+    <!-- web nginx -->
+    <rect class="box-fill box-stroke" x="500" y="0" width="220" height="120" rx="12"/>
+    <text class="box-tag"   x="518" y="26">Static</text>
+    <text class="box-title" x="518" y="56">web (nginx)</text>
+    <text class="box-sub"   x="518" y="84">React admin UI</text>
+    <text class="box-sub"   x="518" y="102">i18n zh / en</text>
+  </g>
+
+  <!-- Layer 2: storage row -->
+  <g transform="translate(440, 290)">
+    <rect class="storage-fill storage-stroke" x="0"   y="0" width="160" height="90" rx="10"/>
+    <text class="storage-title" x="18" y="36">PostgreSQL</text>
+    <text class="storage-sub"   x="18" y="60">projects · users</text>
+    <text class="storage-sub"   x="18" y="76">deployments · audit</text>
+
+    <rect class="storage-fill storage-stroke" x="186" y="0" width="160" height="90" rx="10"/>
+    <text class="storage-title" x="204" y="36">MinIO</text>
+    <text class="storage-sub"   x="204" y="60">source tarballs</text>
+    <text class="storage-sub"   x="204" y="76">presigned URLs</text>
+
+    <rect class="storage-fill storage-stroke" x="372" y="0" width="160" height="90" rx="10"/>
+    <text class="storage-title" x="390" y="36">Registry</text>
+    <text class="storage-sub"   x="390" y="60">docker images</text>
+    <text class="storage-sub"   x="390" y="76">localhost:5001</text>
+
+    <rect class="storage-fill storage-stroke" x="558" y="0" width="160" height="90" rx="10"/>
+    <text class="storage-title" x="576" y="36">Redis</text>
+    <text class="storage-sub"   x="576" y="60">queue / cache</text>
+  </g>
+
+  <!-- Layer 3: K3s server + Traefik -->
+  <g transform="translate(440, 420)">
+    <rect class="box-fill box-stroke" x="0" y="0" width="720" height="120" rx="12"/>
+    <text class="box-tag"   x="18" y="26">Kubernetes</text>
+    <text class="box-title" x="18" y="56">K3s server</text>
+    <text class="box-sub"   x="18" y="84">+ Traefik (DaemonSet, hostNetwork)</text>
+    <text class="box-sub"   x="18" y="102">+ oauth2-proxy · IPAllowList Middleware</text>
+
+    <!-- visual cue: small badge inside saying "DaemonSet runs on EVERY node" -->
+    <g transform="translate(440, 30)">
+      <rect width="260" height="64" rx="32" fill="#F0FDFA" stroke="#0F766E" stroke-width="1.5"/>
+      <text x="22" y="28" class="box-tag">Network gateway</text>
+      <text x="22" y="50" class="box-sub" fill="#0F766E">:80 / :443 on every node</text>
+    </g>
+  </g>
+
+  <!-- Layer 4: docker-compose wrapper note -->
+  <g transform="translate(440, 580)">
+    <rect width="720" height="44" rx="10" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="4 4"/>
+    <text x="22" y="29" class="box-sub" fill="#92400E">
+      ↑ docker-compose 拉起 (control-plane / build-service / web / PG / MinIO / Registry / Redis)
+    </text>
+  </g>
+
+  <!-- ============================================================
+       WORKERS COLUMN
+       ============================================================ -->
+  <g transform="translate(1260, 130)">
+    <!-- Worker box -->
+    <rect class="box-fill box-stroke" x="0" y="0" width="260" height="280" rx="14"/>
+    <text class="box-tag"   x="20" y="32">Worker 1</text>
+    <text class="box-title" x="20" y="62">K3s agent</text>
+    <text class="box-sub"   x="20" y="86">+ containerd</text>
+    <text class="box-sub"   x="20" y="104">+ Traefik (DaemonSet)</text>
+
+    <!-- User pods -->
+    <rect class="pod-fill pod-stroke" x="20" y="124" width="100" height="60" rx="8"/>
+    <text class="pod-label" x="32" y="148">proj-app1</text>
+    <text class="pod-label" x="32" y="170" fill="#0891B2" opacity="0.6">pod</text>
+
+    <rect class="pod-fill pod-stroke" x="140" y="124" width="100" height="60" rx="8"/>
+    <text class="pod-label" x="152" y="148">proj-app2</text>
+    <text class="pod-label" x="152" y="170" fill="#0891B2" opacity="0.6">pod</text>
+
+    <rect class="pod-fill pod-stroke" x="20" y="200" width="100" height="60" rx="8"/>
+    <text class="pod-label" x="32" y="224">proj-app3</text>
+    <text class="pod-label" x="32" y="246" fill="#0891B2" opacity="0.6">pod</text>
+
+    <rect class="pod-fill pod-stroke" x="140" y="200" width="100" height="60" rx="8"/>
+    <text class="pod-label" x="152" y="224">proj-app4</text>
+    <text class="pod-label" x="152" y="246" fill="#0891B2" opacity="0.6">pod</text>
+  </g>
+
+  <g transform="translate(1260, 440)">
+    <rect class="box-fill box-stroke" x="0" y="0" width="260" height="180" rx="14"/>
+    <text class="box-tag"   x="20" y="32">Worker 2 ... N</text>
+    <text class="box-title" x="20" y="62">K3s agent</text>
+    <text class="box-sub"   x="20" y="86">+ containerd</text>
+    <text class="box-sub"   x="20" y="104">+ Traefik (DaemonSet)</text>
+
+    <rect class="pod-fill pod-stroke" x="20" y="124" width="220" height="40" rx="8"/>
+    <text class="pod-label" x="32" y="150">proj-* pods</text>
+  </g>
+
+  <!-- ============================================================
+       ARROWS
+       ============================================================ -->
+
+  <!-- Developer → control-plane (HTTPS API) -->
+  <path class="arrow-stroke" marker-end="url(#arrow-teal)"
+        d="M320 405 L440 190"/>
+  <text class="arrow-label" x="330" y="296" transform="rotate(-26 330 296)">HTTPS · Bearer token</text>
+
+  <!-- control-plane → PG / MinIO / Registry / Redis -->
+  <path class="arrow-stroke" marker-end="url(#arrow-teal)" d="M520 250 L520 290"/>
+  <path class="arrow-stroke" marker-end="url(#arrow-teal)" d="M706 250 L706 290"/>
+
+  <!-- build-service → MinIO + Registry -->
+  <path class="arrow-stroke" stroke-dasharray="5 3" marker-end="url(#arrow-teal)" d="M770 250 L620 290"/>
+  <path class="arrow-stroke" stroke-dasharray="5 3" marker-end="url(#arrow-teal)" d="M770 250 L820 290"/>
+
+  <!-- control-plane → K3s server -->
+  <path class="arrow-stroke" marker-end="url(#arrow-teal)" d="M550 250 L550 420"/>
+  <text class="arrow-label" x="556" y="350">client-go</text>
+
+  <!-- K3s server → workers (cluster control) -->
+  <path class="arrow-stroke" marker-end="url(#arrow-teal)" d="M1160 480 L1260 270"/>
+  <text class="arrow-label" x="1170" y="380" transform="rotate(-32 1170 380)">flannel · :6443</text>
+
+  <!-- registry → workers (image pull) -->
+  <path class="arrow-stroke" stroke-dasharray="5 3" marker-end="url(#arrow-teal)" d="M620 295 L1260 200"/>
+
+  <!-- ============================================================
+       END USER (public) — bottom edge
+       ============================================================ -->
+  <g transform="translate(440, 700)">
+    <rect width="720" height="60" rx="30" fill="#FEF3C7" stroke="#F59E0B" stroke-width="2"/>
+    <text x="40" y="38" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16" font-weight="600" fill="#92400E">
+      🌐 终端用户  ·  *.example.com  ·  admin.example.com  ·  auth.example.com
+    </text>
+  </g>
+
+  <path class="public-stroke" marker-end="url(#arrow-amber)" d="M1260 760 L1160 730"/>
+  <path class="public-stroke" marker-end="url(#arrow-amber)" d="M800 480 L800 700"/>
+  <text class="public-label" x="810" y="600">HTTPS 443 · oauth2-proxy ForwardAuth</text>
+
+  <!-- ============================================================
+       LEGEND
+       ============================================================ -->
+  <g transform="translate(80, 820)">
+    <text font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="600" fill="#334155" y="0">Legend</text>
+
+    <line x1="0"   y1="22" x2="32" y2="22" class="arrow-stroke" marker-end="url(#arrow-teal)"/>
+    <text x="44"  y="26" class="footer-text">控制面 / 集群内通信</text>
+
+    <line x1="200" y1="22" x2="232" y2="22" class="arrow-stroke" stroke-dasharray="5 3" marker-end="url(#arrow-teal)"/>
+    <text x="244" y="26" class="footer-text">镜像 / 对象存储</text>
+
+    <line x1="380" y1="22" x2="412" y2="22" class="public-stroke" marker-end="url(#arrow-amber)"/>
+    <text x="424" y="26" class="footer-text">公网入口 HTTPS</text>
+
+    <rect x="550" y="14" width="16" height="16" rx="3" class="storage-fill storage-stroke"/>
+    <text x="574" y="26" class="footer-text">有状态存储</text>
+
+    <rect x="700" y="14" width="16" height="16" rx="3" class="pod-fill pod-stroke"/>
+    <text x="724" y="26" class="footer-text">用户应用 pod（每项目独立 namespace）</text>
+  </g>
+</svg>

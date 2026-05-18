@@ -1,0 +1,79 @@
+<svg viewBox="0 0 1600 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="iai banner">
+  <defs>
+    <!-- Soft teal-to-mint gradient — same hue family as the in-app brand colour
+         so the banner doesn't fight with the running UI when both are visible. -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0FDFA"/>
+      <stop offset="100%" stop-color="#CCFBF1"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.85" cy="0.5" r="0.6">
+      <stop offset="0%" stop-color="#5EEAD4" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#5EEAD4" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background plate -->
+  <rect width="1600" height="400" fill="url(#bg)"/>
+  <rect width="1600" height="400" fill="url(#glow)"/>
+
+  <!-- Scattered "node" dots on the right side — implies network / cluster
+       without spelling it out. Vary radius and opacity so it doesn't feel
+       like a grid. -->
+  <g fill="#0F766E">
+    <circle cx="1180" cy="80"  r="5"  opacity="0.18"/>
+    <circle cx="1260" cy="180" r="7"  opacity="0.22"/>
+    <circle cx="1390" cy="110" r="9"  opacity="0.20"/>
+    <circle cx="1330" cy="280" r="6"  opacity="0.16"/>
+    <circle cx="1470" cy="220" r="11" opacity="0.24"/>
+    <circle cx="1220" cy="320" r="7"  opacity="0.18"/>
+    <circle cx="1510" cy="100" r="5"  opacity="0.16"/>
+    <circle cx="1430" cy="340" r="8"  opacity="0.20"/>
+
+    <!-- A couple of thin connectors so the dots imply a graph, not a polka pattern. -->
+    <line x1="1180" y1="80"  x2="1260" y2="180" stroke="#0F766E" stroke-width="1.2" opacity="0.14"/>
+    <line x1="1260" y1="180" x2="1390" y2="110" stroke="#0F766E" stroke-width="1.2" opacity="0.14"/>
+    <line x1="1260" y1="180" x2="1330" y2="280" stroke="#0F766E" stroke-width="1.2" opacity="0.14"/>
+    <line x1="1390" y1="110" x2="1470" y2="220" stroke="#0F766E" stroke-width="1.2" opacity="0.14"/>
+    <line x1="1470" y1="220" x2="1430" y2="340" stroke="#0F766E" stroke-width="1.2" opacity="0.14"/>
+  </g>
+
+  <!-- Logo (inlined so the banner is self-contained — no external image refs). -->
+  <g transform="translate(140, 90) scale(0.92)">
+    <path d="M120 24 L40 70 v100 l80 46 80-46 v-100 Z"
+          stroke="#0F766E" stroke-width="10" stroke-linejoin="round"
+          fill="#0F766E" fill-opacity="0.06"/>
+    <path d="M40 70 L120 116 L200 70"
+          stroke="#0F766E" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M120 116 V216"
+          stroke="#0F766E" stroke-width="10" stroke-opacity="0.35" stroke-linecap="round"/>
+    <path d="M120 82 C113 70 96 73 96 88 C96 100 108 105 120 113 C132 105 144 100 144 88 C144 73 127 70 120 82 Z"
+          fill="#F59E0B"/>
+  </g>
+
+  <!-- Brand wordmark + tagline.
+       font-family chain matches `font-sans` / `font-mono` Tailwind defaults
+       (the in-app UI), so this reads as "same brand" on machines that have
+       the system fonts. -->
+  <text x="430" y="180"
+        font-family="ui-sans-serif, -apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', sans-serif"
+        font-size="104" font-weight="700" fill="#0F766E" letter-spacing="-2">
+    爱 AI
+  </text>
+  <text x="432" y="232"
+        font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="34" font-weight="500" fill="#0F766E" opacity="0.55"
+        letter-spacing="6">
+    iai
+  </text>
+  <text x="430" y="290"
+        font-family="ui-sans-serif, -apple-system, 'Segoe UI', 'PingFang SC', 'Noto Sans CJK SC', sans-serif"
+        font-size="22" fill="#0F766E" opacity="0.65">
+    内部一键部署平台
+  </text>
+  <text x="430" y="322"
+        font-family="ui-sans-serif, -apple-system, 'Segoe UI', 'PingFang SC', sans-serif"
+        font-size="18" fill="#0F766E" opacity="0.50"
+        letter-spacing="0.4">
+    Internal one-click deploy platform · 跟 Claude 说一句话，3 分钟拿到带 SSO + HTTPS 的可访问 URL
+  </text>
+</svg>

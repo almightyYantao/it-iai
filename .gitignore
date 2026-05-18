@@ -1,0 +1,10 @@
+.env
+*.log
+bin/
+vendor/
+.idea/
+.vscode/
+.DS_Store
+tmp/
+build-cache/
+kube/config
