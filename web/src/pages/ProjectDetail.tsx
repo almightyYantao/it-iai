@@ -13,6 +13,7 @@ import { CollaboratorsPanel } from "../components/CollaboratorsPanel";
 import { DomainsPanel } from "../components/DomainsPanel";
 import { EnvPanel } from "../components/EnvPanel";
 import { ProjectAccessPanel } from "../components/ProjectAccessPanel";
+import { ProjectTLSPanel } from "../components/ProjectTLSPanel";
 import { ExternalIcon, LayersIcon } from "../components/icons";
 import { shortID, timeAgo } from "../lib/format";
 
@@ -208,6 +209,14 @@ export function ProjectDetail() {
               ? Boolean(who.data.admin)
               : !who.data?.project_id
           }
+        />
+      </div>
+
+      <div className="mt-8">
+        <ProjectTLSPanel
+          slug={slug}
+          initialEnabled={p.tls_enabled ?? false}
+          canEdit={canManage}
         />
       </div>
 

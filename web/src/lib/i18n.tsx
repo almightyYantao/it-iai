@@ -195,6 +195,19 @@ const zh: Dict = {
   "access.button.reset": "撤回修改",
   "access.toast.saved": "已保存",
 
+  // Project HTTPS / TLS toggle
+  "tls.title": "HTTPS",
+  "tls.desc":
+    "开启后，控制面会给项目 Ingress 加上 cert-manager 注解，由 cert-manager 通过 HTTP-01 申请每个域名的 Let's Encrypt 证书并自动续期。需要平台已安装 cert-manager（deploy/install-cert-manager.sh）。",
+  "tls.label.enabled": "为本项目启用 HTTPS",
+  "tls.state.on": "已启用",
+  "tls.state.off": "未启用",
+  "tls.hint.on":
+    "新增的域名会在大约 30 秒后拿到证书。期间 HTTP 仍然可达；证书签发完成后浏览器才会看到绿锁。",
+  "tls.hint.off":
+    "项目目前只走 HTTP。开启前确保所有域名解析已到位且 :80 公网可达 —— Let's Encrypt 的校验请求会从公网发出。",
+  "tls.toast.saved": "已保存，证书将在后台签发",
+
   // Danger zone — project delete
   "danger.title": "危险区域",
   "danger.delete.desc":
@@ -623,6 +636,18 @@ const en: Dict = {
   "access.button.save.busy": "Saving…",
   "access.button.reset": "Discard changes",
   "access.toast.saved": "Saved",
+
+  "tls.title": "HTTPS",
+  "tls.desc":
+    "When enabled, the control plane adds a cert-manager annotation to the project's Ingress; cert-manager solves an HTTP-01 challenge per hostname and provisions a Let's Encrypt cert that renews automatically. Requires deploy/install-cert-manager.sh on the platform.",
+  "tls.label.enabled": "Enable HTTPS for this project",
+  "tls.state.on": "Enabled",
+  "tls.state.off": "Disabled",
+  "tls.hint.on":
+    "New hostnames typically receive their cert within ~30s. HTTP keeps working in the meantime; the browser shows the lock once issuance completes.",
+  "tls.hint.off":
+    "The project is served over plain HTTP. Before flipping this on make sure DNS for every hostname resolves to the platform and :80 is reachable from the public internet — Let's Encrypt's validators come from outside.",
+  "tls.toast.saved": "Saved — cert issuance runs in the background",
 
   "danger.title": "Danger zone",
   "danger.delete.desc":

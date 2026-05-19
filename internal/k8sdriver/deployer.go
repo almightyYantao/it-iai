@@ -34,6 +34,10 @@ type Deployer struct {
 	dyn           dynamic.Interface // for Traefik Middleware CRs we don't import directly
 	baseDomain    string
 	ingressClass  string
+	// Name of the cert-manager ClusterIssuer to attach to Ingresses that opt
+	// into TLS. Empty disables the annotation entirely — handy on dev clusters
+	// where cert-manager isn't installed yet.
+	tlsClusterIssuer string
 	// Image hostname rewritten when control plane refers to a different host than what k3d uses.
 	registryHostFromCluster string
 }
@@ -42,6 +46,7 @@ type DeployerOpts struct {
 	Kubeconfig              string
 	BaseDomain              string
 	IngressClass            string
+	TLSClusterIssuer        string
 	RegistryHostFromCluster string // e.g. "host.k3d.internal:5001"
 }
 
@@ -63,6 +68,7 @@ func New(opts DeployerOpts) (*Deployer, error) {
 		dyn:                     dyn,
 		baseDomain:              opts.BaseDomain,
 		ingressClass:            opts.IngressClass,
+		tlsClusterIssuer:        opts.TLSClusterIssuer,
 		registryHostFromCluster: opts.RegistryHostFromCluster,
 	}, nil
 }
@@ -389,6 +395,11 @@ type IngressHostsInput struct {
 	// through Keycloak. Source from the project's visibility — public projects
 	// pass through, org/restricted projects require login.
 	RequireAuth bool
+	// TLSEnabled adds a cert-manager.io/cluster-issuer annotation and a tls:
+	// section to the Ingress. cert-manager solves an HTTP-01 challenge per
+	// hostname and writes the cert into a per-project Secret that Traefik
+	// reads from automatically.
+	TLSEnabled bool
 }
 
 // SyncIngressHostnames replaces the project's Ingress rules with one rule per
@@ -422,7 +433,7 @@ func (d *Deployer) SyncIngressHostnames(ctx context.Context, in IngressHostsInpu
 			"oauth2-proxy-forward-auth@kubernetescrd",
 		)
 	}
-	return d.writeIngressWithMiddlewareChain(ctx, in.Slug, in.Hostnames, refs)
+	return d.writeIngressWithMiddlewareChain(ctx, in.Slug, in.Hostnames, refs, in.TLSEnabled)
 }
 
 // allowListMiddlewareName: stable per-project name so successive syncs update
@@ -516,14 +527,18 @@ func (d *Deployer) writeIngress(ctx context.Context, slug string, hosts []string
 		ns := d.namespaceFor(slug)
 		refs = []string{fmt.Sprintf("%s-%s@kubernetescrd", ns, middlewareName)}
 	}
-	return d.writeIngressWithMiddlewareChain(ctx, slug, hosts, refs)
+	// applyIngress (the only caller) runs before the access reconciler reads
+	// the project's tls flag, so we always emit the plain-HTTP form here. The
+	// follow-up SyncIngressHostnames call rewrites the Ingress with TLS if
+	// the project has the flag on.
+	return d.writeIngressWithMiddlewareChain(ctx, slug, hosts, refs, false)
 }
 
 // writeIngressWithMiddlewareChain writes the project's Ingress, attaching the
 // supplied middleware references (already fully-qualified —
 // `<namespace>-<name>@kubernetescrd` or `<name>@<provider>`) as a single
 // comma-joined `router.middlewares` annotation. Traefik applies them in order.
-func (d *Deployer) writeIngressWithMiddlewareChain(ctx context.Context, slug string, hosts []string, middlewareRefs []string) error {
+func (d *Deployer) writeIngressWithMiddlewareChain(ctx context.Context, slug string, hosts []string, middlewareRefs []string, tlsEnabled bool) error {
 	ns := d.namespaceFor(slug)
 	name := "app"
 	pathType := netv1.PathTypePrefix
@@ -556,6 +571,21 @@ func (d *Deployer) writeIngressWithMiddlewareChain(ctx context.Context, slug str
 		annotations["traefik.ingress.kubernetes.io/router.middlewares"] = strings.Join(middlewareRefs, ",")
 	}
 
+	// Per-project HTTPS: annotate the Ingress so cert-manager solves an
+	// HTTP-01 challenge against every host in the tls block and writes the
+	// resulting cert into iai-tls-<slug>. Traefik serves it automatically
+	// because the Ingress references that secret in spec.tls. If the operator
+	// hasn't installed cert-manager, the annotation is inert and the project
+	// stays reachable over plain HTTP — no breakage, just no cert.
+	var tlsSpec []netv1.IngressTLS
+	if tlsEnabled && d.tlsClusterIssuer != "" {
+		annotations["cert-manager.io/cluster-issuer"] = d.tlsClusterIssuer
+		tlsSpec = []netv1.IngressTLS{{
+			Hosts:      append([]string(nil), hosts...),
+			SecretName: "iai-tls-" + slug,
+		}}
+	}
+
 	ing := &netv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
@@ -566,6 +596,7 @@ func (d *Deployer) writeIngressWithMiddlewareChain(ctx context.Context, slug str
 		Spec: netv1.IngressSpec{
 			IngressClassName: &d.ingressClass,
 			Rules:            rules,
+			TLS:              tlsSpec,
 		},
 	}
 

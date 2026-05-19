@@ -91,6 +91,12 @@ type Project struct {
 	// ("internal", "public", ...) globally instead of per-project. Null means
 	// "use this project's own AllowCIDRs (custom mode)".
 	AccessPreset  *string         `json:"access_preset,omitempty"`
+	// TLSEnabled requests an HTTPS-only Ingress for this project: cert-manager
+	// issues a per-host Let's Encrypt cert via HTTP-01, and Traefik serves it
+	// on :443. Off by default; flip via PATCH /v1/projects/:slug/tls. The
+	// platform needs cert-manager + a `letsencrypt-prod` ClusterIssuer for
+	// this to do anything (deploy/install-cert-manager.sh).
+	TLSEnabled    bool            `json:"tls_enabled"`
 	CreatedAt     time.Time       `json:"created_at"`
 	LastPushedAt  *time.Time      `json:"last_pushed_at,omitempty"`
 	LastActiveAt  *time.Time      `json:"last_active_at,omitempty"`

@@ -217,12 +217,31 @@ sudo bash deploy/check-agent.sh         # on each worker
 
 ### 3. SSO + TLS
 
-Fill in Keycloak OIDC config on the Web Settings page → Save (hot-reloaded, no restart). Then:
+Fill in Keycloak OIDC config on the Web Settings page → Save (hot-reloaded, no restart). Then pick **one** TLS mode:
+
+**A. Wildcard cert (DNS-01 / bring-your-own)** — one cert covers every app subdomain.
 
 ```bash
 # Drop wildcard cert into /opt/it-iai/tls/ as *.crt + *.key
 sudo /opt/it-iai/deploy/install-tls.sh
+```
 
+**B. Per-project on-demand (HTTP-01)** — install cert-manager once, project owners
+flip "Enable HTTPS" in Project Settings, each app gets its own Let's Encrypt cert
+that renews automatically. No DNS API required.
+
+```bash
+# First-time install of cert-manager + letsencrypt-prod / letsencrypt-staging issuers
+sudo ACME_EMAIL=you@example.com /opt/it-iai/deploy/install-cert-manager.sh
+```
+
+> ⚠️ HTTP-01 needs :80 reachable from the public internet and every app hostname
+> resolving to the platform IP. Let's Encrypt does not support wildcards over
+> HTTP-01 — use mode A or a DNS-01 setup if you need `*.<domain>` certs.
+
+Then in either mode:
+
+```bash
 # Install oauth2-proxy + Traefik ForwardAuth middlewares
 sudo /opt/it-iai/deploy/install-oauth2-proxy.sh
 

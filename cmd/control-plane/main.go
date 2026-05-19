@@ -99,6 +99,7 @@ func runServer() {
 		Kubeconfig:              cfg.Kubeconfig,
 		BaseDomain:              cfg.AppBaseDomain,
 		IngressClass:            cfg.IngressClass,
+		TLSClusterIssuer:        cfg.TLSClusterIssuer,
 		RegistryHostFromCluster: registryHostFromCluster,
 	})
 	if err != nil {

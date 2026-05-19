@@ -99,6 +99,7 @@ func (s *Server) syncIngressForProject(ctx context.Context, p *model.Project) er
 		Hostnames:   hostnames,
 		AllowCIDRs:  s.effectiveAllowCIDRs(ctx, p),
 		RequireAuth: requireAuth,
+		TLSEnabled:  p.TLSEnabled,
 	})
 }
 
@@ -230,6 +231,57 @@ func (s *Server) handlePatchProjectAccess(w http.ResponseWriter, r *http.Request
 		"ok":          true,
 		"preset":      p.AccessPreset,
 		"allow_cidrs": p.AllowCIDRs,
+	})
+}
+
+// PATCH /v1/projects/:slug/tls
+//
+// Body: { "enabled": true|false }
+//
+// Flips the per-project HTTPS opt-in. When turning on, the reconciler adds a
+// cert-manager.io/cluster-issuer annotation to the Ingress and a tls: section
+// listing every hostname; cert-manager solves an HTTP-01 challenge per host
+// and stores the resulting cert in iai-tls-<slug>. When turning off, both
+// the annotation and the tls section are removed and cert-manager garbage-
+// collects the Certificate.
+//
+// Only the project owner or an admin may change this. Cert issuance is
+// asynchronous — clients should poll project status / browser-test the URL
+// to confirm the cert is live (typically ~30s for a fresh HTTP-01).
+func (s *Server) handlePatchProjectTLS(w http.ResponseWriter, r *http.Request) {
+	p := projectFrom(r.Context())
+	actor, _ := ActorFrom(r.Context())
+	if !s.canManageProject(actor, p) {
+		writeError(w, http.StatusForbidden, "not_authorised", "only the project owner or an admin can change the TLS setting")
+		return
+	}
+
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_json", err.Error())
+		return
+	}
+
+	ctx := r.Context()
+	if err := s.store.SetProjectTLSEnabled(ctx, p.ID, body.Enabled); err != nil {
+		writeError(w, http.StatusInternalServerError, "db", err.Error())
+		return
+	}
+	p.TLSEnabled = body.Enabled
+
+	if err := s.syncIngressForProject(ctx, p); err != nil {
+		writeError(w, http.StatusInternalServerError, "ingress_sync", err.Error())
+		return
+	}
+
+	s.store.WriteAudit(ctx, string(actor.Kind), actor.identityString(),
+		"project.tls.update", &p.ID, map[string]any{"enabled": body.Enabled})
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":          true,
+		"tls_enabled": p.TLSEnabled,
 	})
 }
 

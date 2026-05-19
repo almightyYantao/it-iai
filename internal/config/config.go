@@ -48,6 +48,11 @@ type ControlPlane struct {
 	Kubeconfig    string `env:"CP_KUBECONFIG" envDefault:"/root/.kube/config"`
 	IngressClass  string `env:"CP_K8S_INGRESS_CLASS" envDefault:"traefik"`
 
+	// Name of the cert-manager ClusterIssuer used when a project has TLS
+	// enabled. Defaults to the issuer that deploy/install-cert-manager.sh
+	// creates. Override to point at a staging issuer or an internal CA.
+	TLSClusterIssuer string `env:"CP_TLS_CLUSTER_ISSUER" envDefault:"letsencrypt-prod"`
+
 	// User-app sidecar provisioning. Each service follows the same
 	// "admin URL (internal compose network) + public host (what user pods
 	// see in their injected env)" pattern as the image registry above.

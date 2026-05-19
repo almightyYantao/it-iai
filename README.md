@@ -208,12 +208,28 @@ sudo bash deploy/check-agent.sh         # 每台 worker
 
 ### 3. SSO + TLS
 
-在 Web 设置页填好 Keycloak OIDC 配置 → 保存（热生效，无需重启）。然后：
+在 Web 设置页填好 Keycloak OIDC 配置 → 保存（热生效，无需重启）。然后选 **一种** TLS 模式：
+
+**A. 通配证书（DNS-01 / 自带证书）** —— 一张证书覆盖所有 app 子域。
 
 ```bash
 # 通配证书放到 /opt/it-iai/tls/，文件名 *.crt + *.key
 sudo /opt/it-iai/deploy/install-tls.sh
+```
 
+**B. 每个项目按需签发（HTTP-01）** —— 装一次 cert-manager，业务方在「项目设置 → HTTPS」自助开启，
+每个 app 拿到独立的 Let's Encrypt 证书，自动续期，无需 DNS API。
+
+```bash
+# 第一次装 cert-manager + letsencrypt-prod / letsencrypt-staging
+sudo ACME_EMAIL=you@example.com /opt/it-iai/deploy/install-cert-manager.sh
+```
+
+> ⚠️ HTTP-01 要求 :80 公网可达 + 每个 app 域名解析到平台 IP。Let's Encrypt 不支持通配符 HTTP-01；如果需要 `*.<domain>` 走 A 模式或自建 DNS-01。
+
+之后通用：
+
+```bash
 # 安装 oauth2-proxy + Traefik ForwardAuth 中间件
 sudo /opt/it-iai/deploy/install-oauth2-proxy.sh
 

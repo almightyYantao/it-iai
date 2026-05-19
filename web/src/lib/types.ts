@@ -33,6 +33,10 @@ export interface Project {
   // Name of a row in cidr_presets. Non-empty = preset mode (the preset's
   // CIDR list wins; allow_cidrs above is ignored). Empty / null = custom mode.
   access_preset?: string | null;
+  // When true the project's Ingress carries a cert-manager annotation +
+  // tls: section, so cert-manager issues a per-host Let's Encrypt cert.
+  // Off by default. Requires deploy/install-cert-manager.sh on the platform.
+  tls_enabled: boolean;
   created_at: string;
   last_pushed_at?: string | null;
   last_active_at?: string | null;

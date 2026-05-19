@@ -31,12 +31,12 @@ func (s *Store) UpsertUserByEmail(ctx context.Context, email, name string) (*mod
 
 // Project SELECT columns kept as a single string so every read site stays in
 // sync — adding columns without this forces touching every Scan site.
-const projectCols = `id, slug, name, owner_id, visibility, status, manifest, allow_cidrs, access_preset, created_at, last_pushed_at, last_active_at`
+const projectCols = `id, slug, name, owner_id, visibility, status, manifest, allow_cidrs, access_preset, tls_enabled, created_at, last_pushed_at, last_active_at`
 
 func scanProject(row pgx.Row, p *model.Project) error {
 	return row.Scan(
 		&p.ID, &p.Slug, &p.Name, &p.OwnerID, &p.Visibility, &p.Status,
-		&p.Manifest, &p.AllowCIDRs, &p.AccessPreset,
+		&p.Manifest, &p.AllowCIDRs, &p.AccessPreset, &p.TLSEnabled,
 		&p.CreatedAt, &p.LastPushedAt, &p.LastActiveAt,
 	)
 }
@@ -83,6 +83,15 @@ func (s *Store) SetProjectAllowCIDRs(ctx context.Context, id uuid.UUID, cidrs []
 	}
 	_, err := s.Pool.Exec(ctx,
 		`UPDATE projects SET allow_cidrs = $2 WHERE id = $1`, id, cidrs)
+	return err
+}
+
+// SetProjectTLSEnabled flips the per-project HTTPS toggle. The reconciler
+// reads this on the next sync and rewrites the Ingress with (or without) a
+// cert-manager annotation + TLS section accordingly.
+func (s *Store) SetProjectTLSEnabled(ctx context.Context, id uuid.UUID, enabled bool) error {
+	_, err := s.Pool.Exec(ctx,
+		`UPDATE projects SET tls_enabled = $2 WHERE id = $1`, id, enabled)
 	return err
 }
 

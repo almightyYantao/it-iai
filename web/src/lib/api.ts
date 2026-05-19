@@ -100,6 +100,16 @@ export const api = {
       },
     ),
 
+  // setProjectTLS flips the per-project HTTPS toggle. On true, the
+  // control-plane annotates the project's Ingress with the configured
+  // cert-manager ClusterIssuer and cert-manager issues per-host certs.
+  setProjectTLS: (slug: string, enabled: boolean) =>
+    request<{ ok: boolean; tls_enabled: boolean }>(
+      "PATCH",
+      `/v1/projects/${encodeURIComponent(slug)}/tls`,
+      { enabled },
+    ),
+
   listCIDRPresets: () =>
     request<{ presets: CIDRPreset[] }>("GET", "/v1/admin/cidr-presets"),
   upsertCIDRPreset: (name: string, p: { label: string; description: string; cidrs: string[] }) =>
