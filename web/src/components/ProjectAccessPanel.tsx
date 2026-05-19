@@ -253,10 +253,15 @@ function PresetModeBody({
         {preset.cidrs.length === 0 ? (
           <div className="text-[12px] text-ink-faint italic">{t("access.preset.empty.cidrs")}</div>
         ) : (
-          <div className="rounded-md border border-line bg-canvas-base px-3 py-2 font-mono text-[12.5px] text-ink-DEFAULT space-y-0.5">
-            {preset.cidrs.map((c) => (
-              <div key={c}>{c}</div>
-            ))}
+          <div className="rounded-md border border-line bg-canvas-base">
+            <div className="px-3 pt-2 pb-1 text-[10.5px] uppercase tracking-wide text-ink-faint">
+              {t("presets.cidrs.count", { n: String(preset.cidrs.length) })}
+            </div>
+            <div className="px-3 pb-2 max-h-48 overflow-y-auto font-mono text-[12.5px] text-ink-DEFAULT space-y-0.5">
+              {preset.cidrs.map((c) => (
+                <div key={c}>{c}</div>
+              ))}
+            </div>
           </div>
         )}
         {canManagePresets && (

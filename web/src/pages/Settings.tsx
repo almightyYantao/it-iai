@@ -437,11 +437,20 @@ function CIDRPresetsSection() {
                       </div>
                     )}
                   </td>
-                  <td className="px-5 py-3.5 font-mono text-[11.5px] text-ink-DEFAULT">
+                  <td className="px-5 py-3.5 text-[11.5px] text-ink-DEFAULT align-top">
                     {p.cidrs.length === 0 ? (
-                      <span className="text-ink-faint italic">—</span>
+                      <span className="text-ink-faint italic font-mono">—</span>
                     ) : (
-                      p.cidrs.map((c) => <div key={c}>{c}</div>)
+                      <div>
+                        <div className="text-[10.5px] uppercase tracking-wide text-ink-faint mb-1 font-sans">
+                          {t("presets.cidrs.count", { n: String(p.cidrs.length) })}
+                        </div>
+                        <div className="max-h-40 overflow-y-auto font-mono leading-relaxed pr-1">
+                          {p.cidrs.map((c) => (
+                            <div key={c}>{c}</div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </td>
                   <td className="px-5 py-3.5">
