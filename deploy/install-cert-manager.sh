@@ -15,6 +15,12 @@
 #      letsencrypt-staging (for safe testing against LE's higher-limit
 #      staging endpoint). Both use HTTP-01 with Traefik as the solver,
 #      so no DNS API integration is required.
+#   4. Installs a CoreDNS override (`coredns-custom` configmap) that
+#      resolves *.<BASE_DOMAIN> to the platform node's INTERNAL IP from
+#      inside the cluster. Works around cloud hairpin-NAT (Alibaba etc.
+#      don't let an ECS reach its own public IP), which otherwise makes
+#      cert-manager's HTTP-01 self-check time out. External DNS is
+#      untouched — LE's validators still hit the public IP.
 #
 # Per-app certs (not wildcards) are issued on demand: the control-plane
 # annotates each Ingress with `cert-manager.io/cluster-issuer:
@@ -76,6 +82,18 @@ ACME_SERVER_PROD="${ACME_SERVER_PROD:-https://acme-v02.api.letsencrypt.org/direc
 ACME_SERVER_STAGING="${ACME_SERVER_STAGING:-https://acme-staging-v02.api.letsencrypt.org/directory}"
 INGRESS_CLASS="${INGRESS_CLASS:-traefik}"
 
+# BASE_DOMAIN drives the in-cluster DNS override that fixes the hairpin-NAT
+# problem (see step 4). Prefer explicit env, fall back to .env file in the
+# same repo. If we can't determine it the override is skipped with a warning
+# — cert issuance will still work IF the cloud network allows ECS-to-own-
+# public-IP loopback (rare).
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$HERE/.." && pwd)"
+BASE_DOMAIN="${BASE_DOMAIN:-}"
+if [[ -z "$BASE_DOMAIN" && -f "$REPO_ROOT/.env" ]]; then
+  BASE_DOMAIN=$(awk -F= '$1=="CP_APP_BASE_DOMAIN"{sub(/^[^=]*=/,""); print; exit}' "$REPO_ROOT/.env" || true)
+fi
+
 if [[ -z "$ACME_EMAIL" ]]; then
   warn "ACME_EMAIL is unset — Let's Encrypt requires a valid email for issuance."
   warn "Pass it via env: sudo ACME_EMAIL=you@example.com $0"
@@ -90,6 +108,7 @@ ${C_BOLD}Installing cert-manager${C_OFF}
   ${C_DIM}prod server   :${C_OFF} $ACME_SERVER_PROD
   ${C_DIM}staging server:${C_OFF} $ACME_SERVER_STAGING
   ${C_DIM}ingress class :${C_OFF} $INGRESS_CLASS
+  ${C_DIM}base domain   :${C_OFF} ${BASE_DOMAIN:-<unknown — CoreDNS hairpin fix will be skipped>}
 
 EOF
 
@@ -171,7 +190,75 @@ spec:
 YAML
 ok "ClusterIssuers applied"
 
-# --- 4. summary ------------------------------------------------------------
+# --- 4. CoreDNS hairpin-NAT override --------------------------------------
+#
+# Cloud providers (Alibaba, Tencent, AWS without enableDnsHostnames) typically
+# don't allow an ECS instance to reach its own public IP — the kernel sees the
+# packet as coming-from-self and drops it. cert-manager's HTTP-01 self-check
+# resolves the project hostname to the *public* IP via cluster DNS, the
+# request goes out the node, hits the NAT, gets dropped, times out, and the
+# challenge stays in `pending` forever.
+#
+# Fix: install a CoreDNS rewrite via the `coredns-custom` configmap that
+# k3s' bundled CoreDNS imports automatically. Inside the cluster, every
+# `*.<base-domain>` query returns the platform node's INTERNAL IP. From the
+# pod, the request lands directly on Traefik's hostNetwork :80 — no NAT hop.
+# External DNS (what Let's Encrypt actually validates against) is untouched.
+
+if [[ -z "$BASE_DOMAIN" ]]; then
+  warn "skipping CoreDNS hairpin fix — BASE_DOMAIN unknown."
+  warn "If cert issuance hangs in 'pending' with self-check timeout, set"
+  warn "BASE_DOMAIN=<your.domain> and re-run this script."
+else
+  PLATFORM_IP=$("${KUBECTL[@]}" get node -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' 2>/dev/null || true)
+  if [[ -z "$PLATFORM_IP" ]]; then
+    warn "couldn't read platform node InternalIP — skipping CoreDNS hairpin fix"
+  else
+    info "applying CoreDNS hairpin override for *.${BASE_DOMAIN} -> ${PLATFORM_IP}"
+
+    # Refuse to clobber a pre-existing coredns-custom that has other keys.
+    # Operators sometimes put their own overrides there; we shouldn't wipe them.
+    OTHER_KEYS=$("${KUBECTL[@]}" -n kube-system get cm coredns-custom -o json 2>/dev/null \
+      | grep -oE '"[^"]+":' | sed 's/[:"]//g' \
+      | grep -vE '^(apiVersion|kind|metadata|name|namespace|data|labels|annotations|vibedeploy\.io/managed|iai-loopback\.override|creationTimestamp|resourceVersion|uid|managedFields|fieldsType|fieldsV1|f:.*|time|operation|manager|.*\..*\..*)$' \
+      | sort -u || true)
+    if [[ -n "$OTHER_KEYS" ]]; then
+      warn "coredns-custom already has other keys: $(echo $OTHER_KEYS | tr '\n' ' ')"
+      warn "Not overwriting. Add this manually under data: in coredns-custom:"
+      warn "  iai-loopback.override: |"
+      warn "    template IN A ${BASE_DOMAIN} {"
+      warn "      match ^[^.]+\\.${BASE_DOMAIN//./\\.}\\.\$"
+      warn "      answer \"{{ .Name }} 60 IN A ${PLATFORM_IP}\""
+      warn "      fallthrough"
+      warn "    }"
+    else
+      # Escape dots in BASE_DOMAIN for the regex match line.
+      BASE_DOMAIN_RE="${BASE_DOMAIN//./\\.}"
+      cat <<YAML | "${KUBECTL[@]}" apply -f - >/dev/null
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+  labels:
+    vibedeploy.io/managed: "true"
+data:
+  iai-loopback.override: |
+    template IN A ${BASE_DOMAIN} {
+      match ^[^.]+\\.${BASE_DOMAIN_RE}\\.\$
+      answer "{{ .Name }} 60 IN A ${PLATFORM_IP}"
+      fallthrough
+    }
+YAML
+      ok "coredns-custom applied"
+      "${KUBECTL[@]}" -n kube-system rollout restart deploy coredns >/dev/null
+      "${KUBECTL[@]}" -n kube-system rollout status  deploy coredns --timeout=60s >/dev/null && \
+        ok "CoreDNS reloaded" || warn "CoreDNS rollout still in progress — check manually"
+    fi
+  fi
+fi
+
+# --- 5. summary ------------------------------------------------------------
 
 cat <<EOF
 
@@ -197,8 +284,15 @@ ${C_BOLD}Done.${C_OFF}
     ${KUBECTL[*]} -n proj-<slug> describe certificate iai-tls-<slug>
     ${KUBECTL[*]} -n cert-manager logs deploy/cert-manager -f
 
+  ${C_BOLD}Verify in-cluster DNS resolves to the internal IP${C_OFF}
+    ${KUBECTL[*]} -n cert-manager exec deploy/cert-manager -- \\
+      nslookup foo.${BASE_DOMAIN:-<base-domain>}
+    # Should return the platform's INTERNAL IP, not the public IP.
+    # If it returns the public IP, the hairpin fix isn't active —
+    # check coredns-custom configmap and 'kubectl -n kube-system logs deploy/coredns'.
+
   ${C_BOLD}Prerequisites for HTTP-01 to succeed${C_OFF}
-    - Every project hostname resolves to the platform's public IP
+    - Every project hostname resolves (publicly) to the platform's public IP
     - :80 reachable from the public internet (Let's Encrypt's validation
       servers won't follow VPN / IP allow-lists)
 
