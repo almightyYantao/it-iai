@@ -199,6 +199,30 @@ EOF
 # round-trip; gives us a single deterministic manifest to apply.
 b64() { printf '%s' "$1" | base64 | tr -d '\n'; }
 
+# Detect cert-manager. When a ClusterIssuer is present (installed via
+# deploy/install-cert-manager.sh) we annotate the auth ingress so cert-manager
+# issues a per-host LE cert via HTTP-01, removing the dependence on the
+# wildcard TLSStore from install-tls.sh. Set CLUSTER_ISSUER=none to force the
+# wildcard path even when cert-manager is present.
+CLUSTER_ISSUER="${CLUSTER_ISSUER:-}"
+if [[ -z "$CLUSTER_ISSUER" ]]; then
+  for issuer in letsencrypt-prod letsencrypt-staging; do
+    if "${KUBECTL[@]}" get clusterissuer "$issuer" >/dev/null 2>&1; then
+      CLUSTER_ISSUER="$issuer"
+      break
+    fi
+  done
+fi
+CERT_LINE=""
+TLS_BLOCK=""
+if [[ -n "$CLUSTER_ISSUER" && "$CLUSTER_ISSUER" != "none" ]]; then
+  info "cert-manager detected — auth ingress will use ClusterIssuer $CLUSTER_ISSUER"
+  CERT_LINE="    cert-manager.io/cluster-issuer: \"$CLUSTER_ISSUER\""
+  TLS_BLOCK="  tls:
+    - hosts: [\"$AUTH_HOST\"]
+      secretName: oauth2-proxy-tls"
+fi
+
 MANIFEST=$(mktemp)
 cat > "$MANIFEST" <<YAML
 apiVersion: v1
@@ -296,6 +320,7 @@ metadata:
   namespace: oauth2-proxy
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+${CERT_LINE}
 spec:
   rules:
     - host: ${AUTH_HOST}
@@ -307,6 +332,7 @@ spec:
               service:
                 name: oauth2-proxy
                 port: { number: 80 }
+${TLS_BLOCK}
 ---
 # Middleware #1 — ForwardAuth. Attached to every protected user ingress.
 # Traefik calls /oauth2/auth; 200 means the user has a valid session and

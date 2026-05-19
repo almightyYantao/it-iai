@@ -87,12 +87,39 @@ else
   ok "admin UI reachable at 127.0.0.1:${WEB_PORT}"
 fi
 
+# --- detect cert-manager ---------------------------------------------------
+#
+# If a cert-manager ClusterIssuer is installed in the cluster, prefer issuing
+# a per-host cert via HTTP-01 instead of relying on the wildcard TLSStore
+# (install-tls.sh). Set CLUSTER_ISSUER=none to force the legacy wildcard path
+# even when cert-manager is present (e.g. when the new domain hasn't propagated
+# yet and you don't want a failing challenge to mask the working wildcard).
+CLUSTER_ISSUER="${CLUSTER_ISSUER:-}"
+if [[ -z "$CLUSTER_ISSUER" ]]; then
+  for issuer in letsencrypt-prod letsencrypt-staging; do
+    if "${KUBECTL[@]}" get clusterissuer "$issuer" >/dev/null 2>&1; then
+      CLUSTER_ISSUER="$issuer"
+      break
+    fi
+  done
+fi
+CERT_LINE=""
+TLS_BLOCK=""
+TLS_DESC="via TLSStore/default (install-tls.sh)"
+if [[ -n "$CLUSTER_ISSUER" && "$CLUSTER_ISSUER" != "none" ]]; then
+  CERT_LINE="    cert-manager.io/cluster-issuer: \"$CLUSTER_ISSUER\""
+  TLS_BLOCK="  tls:
+    - hosts: [\"$ADMIN_HOST\"]
+      secretName: admin-ui-tls"
+  TLS_DESC="via cert-manager (ClusterIssuer: $CLUSTER_ISSUER, HTTP-01)"
+fi
+
 cat <<EOF
 
 ${C_BOLD}Bridging the admin UI through Traefik${C_OFF}
   ${C_DIM}admin host    :${C_OFF} $ADMIN_HOST
   ${C_DIM}upstream      :${C_OFF} ${PLATFORM_IP}:${WEB_PORT} (docker-compose nginx on platform node)
-  ${C_DIM}wildcard cert :${C_OFF} via TLSStore/default (install-tls.sh)
+  ${C_DIM}TLS source    :${C_OFF} $TLS_DESC
 EOF
 
 # --- apply -----------------------------------------------------------------
@@ -141,6 +168,7 @@ metadata:
     # Both entrypoints — Traefik's HelmChartConfig redirects web→websecure,
     # so this just gives the redirect something to match on for HTTP.
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+${CERT_LINE}
 spec:
   rules:
     - host: ${ADMIN_HOST}
@@ -152,6 +180,7 @@ spec:
               service:
                 name: admin-ui
                 port: { number: 80 }
+${TLS_BLOCK}
 YAML
 ok "Service / Endpoints / Ingress applied"
 
