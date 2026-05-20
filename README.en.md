@@ -72,7 +72,7 @@ Turn internal tools / demos / AI agents from "runs only on my laptop" into "a UR
 Copy and paste the whole line into a terminal:
 
 ```bash
-rm -rf ~/iai && git clone https://github.com/almightyYantao/it-iai.git ~/iai && bash ~/iai/skill/install.sh install
+rm -rf ~/iai-skill && git clone https://github.com/almightyYantao/it-iai-skill.git ~/iai-skill && bash ~/iai-skill/install.sh install
 ```
 
 Idempotent — paste the same line to upgrade later.
@@ -187,7 +187,8 @@ Three steps: install the platform node → install workers → wire TLS + SSO. E
 ### 1. Platform node
 
 ```bash
-git clone https://github.com/almightyYantao/it-iai.git /opt/it-iai
+git clone --recursive https://github.com/almightyYantao/it-iai.git /opt/it-iai
+# Forgot --recursive? Run:  git submodule update --init
 cd /opt/it-iai
 
 sudo BASE_DOMAIN=example.com \
@@ -352,7 +353,7 @@ export VIBEDEPLOY_TOKEN=<token>
 export VIBEDEPLOY_API=http://localhost:8080
 
 cd examples/hello-node
-bash ../../skill/scripts/push.sh
+bash ../../it-iai-skill/scripts/push.sh   # or wherever you cloned it-iai-skill
 ```
 
 Clean up: `make destroy`

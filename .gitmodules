@@ -1,0 +1,3 @@
+[submodule "skill"]
+	path = skill
+	url = git@github.com:almightyYantao/it-iai-skill.git

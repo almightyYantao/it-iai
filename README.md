@@ -70,12 +70,12 @@ claude                # 在 Claude Code 里说一句话
 复制下面这条，整行粘到终端：
 
 ```bash
-rm -rf ~/iai && git clone https://github.com/almightyYantao/it-iai.git ~/iai && bash ~/iai/skill/install.sh install
+rm -rf ~/iai-skill && git clone https://github.com/almightyYantao/it-iai-skill.git ~/iai-skill && bash ~/iai-skill/install.sh install
 ```
 
-幂等——升级时同一条再粘一次。
+幂等——升级时同一条再粘一次。**只拉 Skill 仓**（~20 KB），不用拉整个平台代码。
 
-详细使用：见 [使用手册](docs/使用手册.md)。
+详细使用：见 [使用手册](docs/使用手册.md)；Skill 源码：[it-iai-skill](https://github.com/almightyYantao/it-iai-skill)。
 
 ---
 
@@ -178,12 +178,15 @@ SQLITE_PATH              # /data/app.db    (仅当 needs.sqlite=true)
 ### 1. 平台节点
 
 ```bash
-git clone https://github.com/almightyYantao/it-iai.git /opt/it-iai
+# --recursive 同时拉 skill submodule（业务方装 Skill 用的那个独立小仓）
+git clone --recursive https://github.com/almightyYantao/it-iai.git /opt/it-iai
 cd /opt/it-iai
 
 sudo BASE_DOMAIN=example.com \
      deploy/install-platform.sh
 ```
+
+> 已经 clone 过、忘了 `--recursive`？补一句即可：`git submodule update --init`
 
 这步装好：Docker + K3s server + docker-compose 全家桶（PG / MinIO / Registry / Redis / control-plane / build-service / web nginx），并打印 **bootstrap Deploy Token** 和 **worker 加入命令**。
 
@@ -339,7 +342,7 @@ export VIBEDEPLOY_TOKEN=<token>
 export VIBEDEPLOY_API=http://localhost:8080
 
 cd examples/hello-node
-bash ../../skill/scripts/push.sh
+bash skill/scripts/push.sh   # works if you cloned with --recursive (submodule); otherwise: git submodule update --init
 ```
 
 清理：`make destroy`
