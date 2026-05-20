@@ -80,7 +80,10 @@ vd_ensure_api_url() {
     return 0
   fi
   local def="http://localhost:8080"
-  printf '\033[36m?\033[0m Control-plane API URL [\033[2m%s\033[0m]: ' "$def" >&2
+  printf '\033[36m?\033[0m Control-plane API URL\n' >&2
+  printf '  \033[2m示例: https://admin.iai.your-company.com  /  http://10.0.0.5:8080\033[0m\n' >&2
+  printf '  \033[2m向 IT 同事或部署负责人要这个地址\033[0m\n' >&2
+  printf '\033[36m?\033[0m [\033[2m%s\033[0m]: ' "$def" >&2
   local ans
   read -r ans || true
   ans="${ans:-$def}"
@@ -105,7 +108,16 @@ vd_token() {
   # behaviour ("run deploy +login first") shipped users to a separate command
   # that just prompts for the same string, which is friction we can remove.
   if [[ -t 0 ]]; then
-    printf '\033[36m?\033[0m Paste your Deploy Token (vbd_live_...): ' >&2
+    # Tell the user where to get the token. The /skill page on the Admin UI
+    # has a one-click "copy export VIBEDEPLOY_TOKEN=…" line; api_url is
+    # usually the same host as the Admin UI in single-domain deployments,
+    # but we hint both possibilities to cover separated setups.
+    local api
+    api=$(vd_api_url)
+    printf '\033[36m?\033[0m Paste your Deploy Token (vbd_live_...)\n' >&2
+    printf '  \033[2m在 Admin UI 的 /skill 页面生成（明文只显示一次）\033[0m\n' >&2
+    printf '  \033[2m地址例: %s/skill  （如果 Admin UI 和 API 不同域，请改成 admin.<your-domain>/skill）\033[0m\n' >&2
+    printf '\033[36m?\033[0m Token: ' >&2
     local tok
     read -rs tok || true
     echo >&2
