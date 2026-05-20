@@ -264,6 +264,8 @@ const zh: Dict = {
   "domains.error.taken": "该域名已被其他项目占用。",
   "domains.error.invalid": "请输入合法的域名（如 app.example.com）。",
   "domains.error.reserved": "该域名在平台通配子域内，平台会自动管理，无需手动添加。",
+  "domains.error.limit_reached": "已达本项目自定义域名上限，先移除一个再添加。",
+  "domains.limit.reached": "每个项目最多 {{max}} 个自定义域名，删除现有的再来添加新的。如有特殊需要请联系管理员调整 CP_MAX_CUSTOM_DOMAINS。",
   "domains.remove.confirm": "确认移除「{{hostname}}」？该域名将立即停止解析到本项目。",
 
   // Collaborators panel
@@ -703,6 +705,8 @@ const en: Dict = {
   "domains.error.taken": "This hostname is already bound to another project.",
   "domains.error.invalid": "Enter a valid hostname (e.g. app.example.com).",
   "domains.error.reserved": "This hostname is on the platform's wildcard domain — managed automatically, no need to add it.",
+  "domains.error.limit_reached": "This project is at its custom-domain limit. Remove one before adding another.",
+  "domains.limit.reached": "Each project can have at most {{max}} custom domain(s). Delete an existing one to add a new one, or ask an admin to raise CP_MAX_CUSTOM_DOMAINS.",
   "domains.remove.confirm": "Remove “{{hostname}}”? It will stop resolving to this project immediately.",
 
   "collab.heading": "Collaborators",

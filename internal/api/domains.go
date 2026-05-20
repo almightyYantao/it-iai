@@ -40,13 +40,16 @@ func (s *Server) handleListDomains(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Always include the platform-issued default subdomain at the top.
+	// Surfaces max_custom so the UI can hide the add form once the cap is hit
+	// instead of relying solely on the server's 409.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"default": map[string]any{
 			"hostname": p.Slug + "." + s.cfg.AppBaseDomain,
 			"kind":     "subdomain",
 			"verified": true,
 		},
-		"custom": list,
+		"custom":     list,
+		"max_custom": s.cfg.MaxCustomDomains,
 	})
 }
 
@@ -66,6 +69,22 @@ func (s *Server) handleAddDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := projectFrom(r.Context())
+	// Enforce the per-project cap before doing more work. We re-read the
+	// current list each time rather than relying on a counter so concurrent
+	// add requests can't both squeak through under the limit. The default
+	// subdomain isn't in `domains`, so it doesn't count against the cap.
+	if s.cfg.MaxCustomDomains > 0 {
+		existing, err := s.store.ListDomains(r.Context(), p.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "db", err.Error())
+			return
+		}
+		if len(existing) >= s.cfg.MaxCustomDomains {
+			writeError(w, http.StatusConflict, "limit_reached",
+				"this project already has the maximum number of custom domains; remove one before adding another")
+			return
+		}
+	}
 	// Hostnames under the platform's wildcard domain (*.example.com) get
 	// special handling — they don't need TLS / DNS work from the user, but
 	// they have two ways to go wrong:

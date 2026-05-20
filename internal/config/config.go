@@ -53,6 +53,14 @@ type ControlPlane struct {
 	// creates. Override to point at a staging issuer or an internal CA.
 	TLSClusterIssuer string `env:"CP_TLS_CLUSTER_ISSUER" envDefault:"letsencrypt-prod"`
 
+	// Hard cap on how many custom hostnames a single project can register
+	// (vanity subdomain + fully-custom FQDN combined). The default subdomain
+	// <slug>.<base> is platform-issued and doesn't count. Default 1 keeps
+	// each project tied to a single recognizable URL and bounds the Let's
+	// Encrypt SAN size (one cert per project). Bump for projects that
+	// genuinely need apex + www + branded variants.
+	MaxCustomDomains int `env:"CP_MAX_CUSTOM_DOMAINS" envDefault:"1"`
+
 	// User-app sidecar provisioning. Each service follows the same
 	// "admin URL (internal compose network) + public host (what user pods
 	// see in their injected env)" pattern as the image registry above.

@@ -59,6 +59,7 @@ export function DomainsPanel({
         if (err.code === "hostname_taken") return setOpError(t("domains.error.taken"));
         if (err.code === "bad_hostname")  return setOpError(t("domains.error.invalid"));
         if (err.code === "reserved")      return setOpError(t("domains.error.reserved"));
+        if (err.code === "limit_reached") return setOpError(t("domains.error.limit_reached"));
         return setOpError(err.message);
       }
       setOpError(String(err));
@@ -108,6 +109,8 @@ export function DomainsPanel({
   }
 
   const customs = q.data?.custom ?? [];
+  const maxCustom = q.data?.max_custom ?? 1;
+  const atLimit = customs.length >= maxCustom;
 
   return (
     <section className="rounded-lg border border-line-subtle bg-canvas-surface">
@@ -190,7 +193,13 @@ export function DomainsPanel({
           </tbody>
         </table>
 
-        {canEdit && (
+        {canEdit && atLimit && (
+          <div className="mt-5 rounded-md border border-line-subtle bg-canvas-base/60 text-[12px] text-ink-muted px-3 py-2 leading-relaxed">
+            {t("domains.limit.reached", { max: String(maxCustom) })}
+          </div>
+        )}
+
+        {canEdit && !atLimit && (
           <div className="mt-5 space-y-5">
             {/* Vanity subdomain — fixed suffix, only the prefix is editable.
                 No DNS / TLS for the user to set up; wildcard cert covers it. */}

@@ -181,6 +181,9 @@ export interface Domain {
 export interface DomainsResponse {
   default: { hostname: string; kind: "subdomain"; verified: boolean };
   custom: Domain[];
+  // Hard cap from CP_MAX_CUSTOM_DOMAINS (default 1). Once custom.length
+  // reaches max_custom, the server refuses new adds with limit_reached.
+  max_custom: number;
 }
 
 // Paged response shape — every list endpoint returns this envelope now.
