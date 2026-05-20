@@ -311,7 +311,7 @@ const zh: Dict = {
   "visibility.public": "公开",
 
   // Skill tutorial page
-  "nav.skill": "Skill 指南",
+  "nav.skill": "Skill",
   "skill.eyebrow": "Claude Code 集成",
   "skill.title": "在 Claude Code 中部署",
   "skill.description":
@@ -759,7 +759,7 @@ const en: Dict = {
   "visibility.restricted": "restricted",
   "visibility.public": "public",
 
-  "nav.skill": "Skill guide",
+  "nav.skill": "Skill",
   "skill.eyebrow": "Claude Code integration",
   "skill.title": "Deploy from Claude Code",
   "skill.description":
