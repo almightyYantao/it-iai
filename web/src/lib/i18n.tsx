@@ -195,6 +195,17 @@ const zh: Dict = {
   "access.button.reset": "撤回修改",
   "access.toast.saved": "已保存",
 
+  // Project name (rename)
+  "name.title": "项目名称",
+  "name.desc": "项目在 UI、列表和审计日志里的显示名。可以随时改；slug（URL 片段）固定不变。",
+  "name.placeholder": "给项目起个好记的名字",
+  "name.slug.label": "URL slug",
+  "name.slug.fixed": "（创建后不可修改）",
+  "name.warning.defaulted":
+    "当前项目名等于 slug「{{slug}}」—— 初次部署时 Skill 没拿到 name（CI/非交互模式），先用 slug 顶上。建议改成更易读的名字。",
+  "name.error.empty": "项目名不能为空。",
+  "name.error.too_long": "项目名最长 120 个字符。",
+
   // Project HTTPS / TLS toggle
   "tls.title": "HTTPS",
   "tls.desc":
@@ -639,6 +650,16 @@ const en: Dict = {
   "access.button.save.busy": "Saving…",
   "access.button.reset": "Discard changes",
   "access.toast.saved": "Saved",
+
+  "name.title": "Project name",
+  "name.desc": "The display name shown in the UI, project lists, and audit log. Editable any time; the slug (URL fragment) is fixed.",
+  "name.placeholder": "Give the project a friendly name",
+  "name.slug.label": "URL slug",
+  "name.slug.fixed": "(fixed after creation)",
+  "name.warning.defaulted":
+    "This project's name is the same as its slug \"{{slug}}\" — the Skill couldn't get a name on first push (CI / non-interactive). Pick a more readable name.",
+  "name.error.empty": "Name can't be empty.",
+  "name.error.too_long": "Name must be 120 characters or fewer.",
 
   "tls.title": "HTTPS",
   "tls.desc":

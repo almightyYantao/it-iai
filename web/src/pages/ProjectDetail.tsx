@@ -13,6 +13,7 @@ import { CollaboratorsPanel } from "../components/CollaboratorsPanel";
 import { DomainsPanel } from "../components/DomainsPanel";
 import { EnvPanel } from "../components/EnvPanel";
 import { ProjectAccessPanel } from "../components/ProjectAccessPanel";
+import { ProjectNamePanel } from "../components/ProjectNamePanel";
 import { ProjectTLSPanel } from "../components/ProjectTLSPanel";
 import { ExternalIcon, LayersIcon } from "../components/icons";
 import { shortID, timeAgo } from "../lib/format";
@@ -183,6 +184,14 @@ export function ProjectDetail() {
       )}
 
       <div className="mt-10">
+        <ProjectNamePanel
+          slug={slug}
+          initialName={p.name || slug}
+          canEdit={canManage}
+        />
+      </div>
+
+      <div className="mt-8">
         <CollaboratorsPanel slug={slug} ownerEmail={p.owner_email} />
       </div>
 

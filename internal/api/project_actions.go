@@ -234,6 +234,54 @@ func (s *Server) handlePatchProjectAccess(w http.ResponseWriter, r *http.Request
 	})
 }
 
+// PATCH /v1/projects/:slug/name
+//
+// Body: { "name": "New display name" }
+//
+// Renames the project's display name. The slug (URL fragment) stays fixed —
+// changing that would break existing deploy tokens, ingresses, and bookmarks.
+// Owner or admin only. Trims whitespace; rejects empty after trim, and caps
+// at 120 chars to keep the table layout sane.
+func (s *Server) handlePatchProjectName(w http.ResponseWriter, r *http.Request) {
+	p := projectFrom(r.Context())
+	actor, _ := ActorFrom(r.Context())
+	if !s.canManageProject(actor, p) {
+		writeError(w, http.StatusForbidden, "not_authorised", "only the project owner or an admin can rename this project")
+		return
+	}
+
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_json", err.Error())
+		return
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "empty_name", "name cannot be empty")
+		return
+	}
+	if len([]rune(name)) > 120 {
+		writeError(w, http.StatusBadRequest, "name_too_long", "name must be 120 characters or fewer")
+		return
+	}
+
+	ctx := r.Context()
+	if err := s.store.SetProjectName(ctx, p.ID, name); err != nil {
+		writeError(w, http.StatusInternalServerError, "db", err.Error())
+		return
+	}
+
+	s.store.WriteAudit(ctx, string(actor.Kind), actor.identityString(),
+		"project.name.update", &p.ID, map[string]any{"old": p.Name, "new": name})
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":   true,
+		"name": name,
+	})
+}
+
 // PATCH /v1/projects/:slug/tls
 //
 // Body: { "enabled": true|false }

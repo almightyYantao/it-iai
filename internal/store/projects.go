@@ -86,6 +86,16 @@ func (s *Store) SetProjectAllowCIDRs(ctx context.Context, id uuid.UUID, cidrs []
 	return err
 }
 
+// SetProjectName renames a project. The slug stays fixed (URL stability); this
+// only updates the human-readable display name shown in the UI / Skill output.
+// Empty strings are rejected at the API layer — the column is NOT NULL and the
+// app keeps a non-empty invariant.
+func (s *Store) SetProjectName(ctx context.Context, id uuid.UUID, name string) error {
+	_, err := s.Pool.Exec(ctx,
+		`UPDATE projects SET name = $2 WHERE id = $1`, id, name)
+	return err
+}
+
 // SetProjectTLSEnabled flips the per-project HTTPS toggle. The reconciler
 // reads this on the next sync and rewrites the Ingress with (or without) a
 // cert-manager annotation + TLS section accordingly.

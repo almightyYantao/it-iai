@@ -83,12 +83,23 @@ if [[ -z "$slug" ]]; then
   # mirrors the pre-prompt behaviour for CI / piped runs.
   default_name=$(echo "$manifest" | jq -r '.name')
   name="$default_name"
+  name_explicit=false   # tracks whether the user typed a name vs accepting default
   desired_slug=""
 
   if [[ -t 0 ]]; then
-    printf '\033[36m?\033[0m Project name [\033[2m%s\033[0m]: ' "$default_name" >&2
-    read -r answer || true
-    [[ -n "$answer" ]] && name="$answer"
+    # Explicit "Would you like to set a name?" gate. Default is YES; user can
+    # answer 'n' to skip the prompt entirely (= use scanner's guess). Empty
+    # answer at the name prompt also = accept default.
+    printf '\033[36m?\033[0m 设置项目名称？(y/n，回车 = y，scanner 猜的是「\033[2m%s\033[0m」) [Y/n]: ' "$default_name" >&2
+    read -r ans || true
+    if [[ ! "$ans" =~ ^[nN] ]]; then
+      printf '\033[36m?\033[0m Project name [\033[2m%s\033[0m]: ' "$default_name" >&2
+      read -r answer || true
+      if [[ -n "$answer" ]]; then
+        name="$answer"
+        name_explicit=true
+      fi
+    fi
 
     # Suggest a slug by lowercasing + hyphenating the name. The server will
     # still validate and reject anything unsafe; this is just to spare the
@@ -103,6 +114,17 @@ if [[ -z "$slug" ]]; then
     elif [[ -n "$suggested_slug" ]]; then
       desired_slug="$suggested_slug"
     fi
+  fi
+
+  # When the user accepted the scanner's guess (or there's no TTY at all),
+  # make it loud that the name was defaulted and tell them where to rename
+  # it later. Otherwise it's easy to land in the UI and not realise the
+  # display name = the random slug.
+  if ! $name_explicit; then
+    web_base="${VIBEDEPLOY_WEB_URL:-${api_url%/api*}}"
+    web_base="${web_base%/}"
+    vd_warn "未设置项目名称 —— 使用默认值「$name」"
+    vd_warn "稍后可在 Admin UI 修改：${web_base}/projects/<slug> → 项目名称面板"
   fi
 
   # Strip empty-string keys from manifest before sending so the server can apply

@@ -100,6 +100,15 @@ export const api = {
       },
     ),
 
+  // setProjectName updates the project's display name. The slug (URL fragment)
+  // stays fixed — only the human-readable name changes.
+  setProjectName: (slug: string, name: string) =>
+    request<{ ok: boolean; name: string }>(
+      "PATCH",
+      `/v1/projects/${encodeURIComponent(slug)}/name`,
+      { name },
+    ),
+
   // setProjectTLS flips the per-project HTTPS toggle. On true, the
   // control-plane annotates the project's Ingress with the configured
   // cert-manager ClusterIssuer and cert-manager issues per-host certs.
