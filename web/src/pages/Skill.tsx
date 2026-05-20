@@ -20,8 +20,11 @@ import { CheckIcon, ClipboardIcon, SparklesIcon, TerminalIcon } from "../compone
 //     code block so 'copy' actually gives the user a working snippet,
 //     not a placeholder they have to fill in.
 
-const REPO_HTTPS = "https://github.com/almightyYantao/it-iai.git";
-const REPO_SSH = "git@github.com:almightyYantao/it-iai.git";
+// Standalone Skill repo — independent of the platform repo so business users
+// pull only the ~20KB they need, not the whole control-plane / web / deploy code.
+const REPO_HTTPS = "https://github.com/almightyYantao/it-iai-skill.git";
+const REPO_SSH = "git@github.com:almightyYantao/it-iai-skill.git";
+const REPO_DIR = "~/iai-skill";
 
 type InstallTab = "symlink" | "copy" | "npx";
 
@@ -47,17 +50,17 @@ export VIBEDEPLOY_TOKEN=${token}`;
 
   const verifyCmd = `curl -fsS -H "Authorization: Bearer $VIBEDEPLOY_TOKEN" $VIBEDEPLOY_API/v1/whoami | jq`;
 
-  const cloneSnippet = `git clone ${REPO_SSH} ~/iai
+  const cloneSnippet = `git clone ${REPO_SSH} ${REPO_DIR}
 # or HTTPS if you don't have SSH set up:
-# git clone ${REPO_HTTPS} ~/iai
-cd ~/iai`;
+# git clone ${REPO_HTTPS} ${REPO_DIR}
+cd ${REPO_DIR}`;
 
   const installSnippet: Record<InstallTab, string> = {
     symlink: `mkdir -p ~/.claude/skills
-ln -s ~/iai/skill ~/.claude/skills/iai`,
+ln -s ${REPO_DIR} ~/.claude/skills/iai`,
     copy: `mkdir -p ~/.claude/skills
-cp -r ~/iai/skill ~/.claude/skills/iai`,
-    npx: `npx skills install ~/iai/skill`,
+cp -r ${REPO_DIR} ~/.claude/skills/iai`,
+    npx: `npx skills install ${REPO_DIR}`,
   };
 
   const tabMeta: { value: InstallTab; title: string; desc: string; tag?: string }[] = [
@@ -101,7 +104,7 @@ cp -r ~/iai/skill ~/.claude/skills/iai`,
         <p className="text-[12.5px] text-ink-muted mb-3 leading-relaxed">{t("skill.quickstart.desc")}</p>
         <CodeBlock
           title="bash"
-          code={`rm -rf ~/iai && git clone ${REPO_HTTPS} ~/iai && bash ~/iai/skill/install.sh install`}
+          code={`rm -rf ${REPO_DIR} && git clone ${REPO_HTTPS} ${REPO_DIR} && bash ${REPO_DIR}/install.sh install`}
         />
         <p className="text-[11.5px] text-ink-muted mt-3 leading-relaxed">
           {t("skill.quickstart.hint")}
