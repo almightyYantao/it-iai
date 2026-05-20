@@ -1,6 +1,6 @@
 ---
 name: iai
-description: iai (爱 AI) 一键部署。把当前项目打包、上传、构建并部署到公司内网子域名。当用户说 `deploy +push` / `deploy +status` / `deploy +logs` / `deploy +list` / `deploy +login` / `deploy +share` 时使用。Skill 会扫描 cwd 并通过 Control Plane API 完成部署，全程不需要用户写 Dockerfile / k8s manifest。自定义域名走 Web 后台。
+description: iai (爱 AI) 一键部署。把当前项目打包、上传、构建并部署到公司内网子域名。当用户说 `deploy +push` / `deploy +status` / `deploy +logs` / `deploy +list` / `deploy +login` / `deploy +share` 时使用。Skill 会扫描 cwd 并通过 Control Plane API 完成部署，全程不需要用户写 Dockerfile / k8s manifest。项目名修改、HTTPS 开关、自定义域名、IP 访问控制都在 Web 后台做。
 ---
 
 # iai Skill
@@ -17,7 +17,20 @@ description: iai (爱 AI) 一键部署。把当前项目打包、上传、构建
 | `deploy +list` | 列出我**自己**的项目（owner 或 collaborator） |
 | `deploy +share list / add EMAIL / remove EMAIL` | 协作者管理（owner 或 admin 才能改） |
 
-> **自定义域名管理在 Web 后台做**：项目详情页 → 自定义域名 panel。在这里加比命令行更直观，并且能立刻看到重复占用 / DNS 提示等错误。
+## 走 CLI 还是走 Web 后台
+
+| 需求 | 入口 |
+|---|---|
+| 部署 / 重新部署 | `deploy +push`（CLI） |
+| 查状态 / 日志 / 项目列表 | CLI（`+status` / `+logs` / `+list`） |
+| 协作者增删 | CLI（`+share`）或 Web 后台「协作者」面板 |
+| **改项目名** | **Web 后台 → 项目详情页「项目名称」面板**（slug 不变，链接还能用） |
+| **开 / 关 HTTPS** | **Web 后台 → 项目详情页「HTTPS」面板**（cert-manager 自动签发 LE 证书，约 30 秒） |
+| **加自定义域名 / 自定义子域** | **Web 后台 → 项目详情页「自定义域名」面板**（每个项目默认上限 1 个，含子域和买的域名） |
+| **改 IP 访问控制 / 内网限制** | **Web 后台 → 项目详情页「访问控制」面板**（选预设或自定义 CIDR） |
+| **改可见性 public / org / restricted** | Web 后台项目页 |
+
+> Claude 收到 "怎么改项目名 / 怎么开 HTTPS / 怎么加自定义域名 / 怎么限 IP" 这类问题时，**不要尝试用 CLI 做**——这些没有对应命令，引导用户去 Web 后台对应面板即可。
 
 ## 鉴权
 
