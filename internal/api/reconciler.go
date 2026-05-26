@@ -334,6 +334,7 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 
 		if ready {
 			_ = r.srv.store.MarkDeploymentStatus(ctx, p.ID, model.DeployRunning, "")
+			_ = r.srv.store.SupersedeRunningSiblings(ctx, p.ProjectID, p.ID)
 			_ = r.srv.store.UpdateProjectStatus(ctx, p.ProjectID, model.ProjectRunning)
 			_ = r.srv.store.TouchProjectPushed(ctx, p.ProjectID)
 			_, _ = r.srv.store.AppendEvent(ctx, p.ID, "deploy", "info", "deployment ready")

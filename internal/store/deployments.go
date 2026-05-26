@@ -154,6 +154,19 @@ func (s *Store) SupersedeOlderDeployments(ctx context.Context, projectID, keep u
 	return err
 }
 
+// SupersedeRunningSiblings marks any other running deployment of the same project
+// as superseded. Called at the moment a fresh deployment reaches running, so the
+// previous live record steps off-stage in the UI. Not done at upload time because
+// the previous deployment should keep serving traffic until the new one is ready.
+func (s *Store) SupersedeRunningSiblings(ctx context.Context, projectID, keep uuid.UUID) error {
+	const q = `
+		UPDATE deployments SET status='superseded'
+		WHERE project_id = $1 AND id <> $2 AND status='running'
+	`
+	_, err := s.Pool.Exec(ctx, q, projectID, keep)
+	return err
+}
+
 // AppendEvent stores an event and returns its id for SSE replay.
 func (s *Store) AppendEvent(ctx context.Context, deploymentID uuid.UUID, phase, level, message string) (int64, error) {
 	var id int64
