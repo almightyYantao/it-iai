@@ -49,6 +49,7 @@ func main() {
 		AccessKey: cfg.S3AccessKey,
 		SecretKey: cfg.S3SecretKey,
 		Bucket:    cfg.S3BucketSource,
+		Region:    cfg.S3Region,
 		UseSSL:    cfg.S3UseSSL,
 	})
 	if err != nil {

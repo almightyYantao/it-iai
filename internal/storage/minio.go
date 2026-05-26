@@ -35,14 +35,18 @@ type Options struct {
 	AccessKey      string
 	SecretKey      string
 	Bucket         string
-	UseSSL         bool
-	PublicUseSSL   bool
+	Region         string // SigV4 region. MUST be set so PresignedXxx skips GetBucketLocation —
+	// otherwise the public client tries to dial PublicEndpoint from inside the
+	// cluster network, which fails under NAT hairpin.
+	UseSSL       bool
+	PublicUseSSL bool
 }
 
 func New(opts Options) (*Client, error) {
 	internal, err := minio.New(opts.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(opts.AccessKey, opts.SecretKey, ""),
 		Secure: opts.UseSSL,
+		Region: opts.Region,
 	})
 	if err != nil {
 		return nil, err
@@ -52,6 +56,7 @@ func New(opts Options) (*Client, error) {
 		p, err := minio.New(opts.PublicEndpoint, &minio.Options{
 			Creds:  credentials.NewStaticV4(opts.AccessKey, opts.SecretKey, ""),
 			Secure: opts.PublicUseSSL,
+			Region: opts.Region,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("init public minio client: %w", err)

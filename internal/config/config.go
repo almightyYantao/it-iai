@@ -90,6 +90,7 @@ type BuildService struct {
 	S3AccessKey    string `env:"BS_S3_ACCESS_KEY,required"`
 	S3SecretKey    string `env:"BS_S3_SECRET_KEY,required"`
 	S3BucketSource string `env:"BS_S3_BUCKET_SOURCE" envDefault:"vibedeploy-source"`
+	S3Region       string `env:"BS_S3_REGION" envDefault:"us-east-1"`
 	S3UseSSL       bool   `env:"BS_S3_USE_SSL" envDefault:"false"`
 
 	RegistryHost   string        `env:"BS_REGISTRY_HOST,required"`
