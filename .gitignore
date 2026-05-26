@@ -1,6 +1,8 @@
 .env
 *.log
 bin/
+/control-plane
+/build-service
 vendor/
 .idea/
 .vscode/
