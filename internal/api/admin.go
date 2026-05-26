@@ -39,12 +39,11 @@ func parsePager(r *http.Request, defaultLimit, maxLimit int) (limit, offset int)
 
 // handleAdminProjects returns every project regardless of ownership.
 // Paginated; total returned in the body so the client can render a pager.
+//
+// No admin gate: the project list is browsable by every member; mutations on
+// any returned project still go through canManageProject (owner OR admin),
+// so non-owners only get a read-only directory view.
 func (s *Server) handleAdminProjects(w http.ResponseWriter, r *http.Request) {
-	actor, _ := ActorFrom(r.Context())
-	if !isAdminActor(actor) {
-		writeError(w, http.StatusForbidden, "not_admin", "admin scope required")
-		return
-	}
 	limit, offset := parsePager(r, 10, 200)
 	ctx := r.Context()
 
@@ -106,12 +105,10 @@ func (s *Server) handleAdminProjects(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleAdminMetrics returns aggregate counts (projects/deployments).
+// No admin gate: numbers only, no per-tenant data; surfaced on the Overview
+// landing page so every logged-in member sees platform health at a glance.
 func (s *Server) handleAdminMetrics(w http.ResponseWriter, r *http.Request) {
-	actor, _ := ActorFrom(r.Context())
-	if !isAdminActor(actor) {
-		writeError(w, http.StatusForbidden, "not_admin", "admin scope required")
-		return
-	}
 	ctx := r.Context()
 	type metrics struct {
 		Projects struct {

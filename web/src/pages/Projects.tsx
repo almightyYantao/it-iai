@@ -14,30 +14,12 @@ import { timeAgo } from "../lib/format";
 
 type Scope = "all" | "mine";
 
-function isAdminWho(
-  who: { kind?: "user" | "token"; admin?: boolean; scopes?: string[] | null } | undefined,
-): boolean {
-  if (!who) return false;
-  if (who.kind === "user") return Boolean(who.admin);
-  if (who.kind === "token") {
-    const scopes = who.scopes ?? [];
-    return scopes.includes("admin") || scopes.includes("*");
-  }
-  return false;
-}
-
 export function Projects() {
   const { t } = useI18n();
   const nav = useNavigate();
-  const who = useQuery({ queryKey: ["whoami"], queryFn: api.whoami, retry: false });
-  const isAdmin = isAdminWho(who.data);
 
-  const [scope, setScope] = useState<Scope>("mine");
+  const [scope, setScope] = useState<Scope>("all");
   const [pg, setPg] = useState<PaginationState>({ page: 1, pageSize: 10 });
-
-  useEffect(() => {
-    if (who.data && isAdmin) setScope("all");
-  }, [who.data, isAdmin]);
 
   // Reset to page 1 when scope toggles — different result set.
   useEffect(() => {
@@ -53,7 +35,6 @@ export function Projects() {
         : api.listMyProjects(pg.pageSize, offset);
     },
     refetchInterval: 5000,
-    enabled: who.isSuccess,
   });
 
   return (
@@ -63,16 +44,14 @@ export function Projects() {
         title={t("projects.title")}
         description={scope === "all" ? t("projects.description.all") : t("projects.description.mine")}
         actions={
-          isAdmin && (
-            <SegmentedControl
-              value={scope}
-              onChange={setScope}
-              options={[
-                { value: "mine", label: t("projects.toggle.mine") },
-                { value: "all", label: t("projects.toggle.all") },
-              ]}
-            />
-          )
+          <SegmentedControl
+            value={scope}
+            onChange={setScope}
+            options={[
+              { value: "mine", label: t("projects.toggle.mine") },
+              { value: "all", label: t("projects.toggle.all") },
+            ]}
+          />
         }
       />
 
