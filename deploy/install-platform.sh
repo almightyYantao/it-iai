@@ -385,6 +385,31 @@ cd "$REPO_ROOT"
 docker compose pull --ignore-buildable 2>/dev/null || true
 docker compose up -d --build
 
+# 7b. Sync user-postgres admin password to .env -----------------------------
+# postgres:* honors POSTGRES_PASSWORD only on first init (empty data volume).
+# Re-runs of this script regenerate the random password in .env but the volume
+# still holds the original one — control-plane then fails SASL auth. Force the
+# in-DB password to match whatever .env now says. Idempotent: ALTER USER with
+# the same password is a no-op. Local unix socket is trust-auth so we don't
+# need to know the current password to do this.
+vd_info "syncing user-postgres admin password from .env"
+# Re-read in case this is a re-install path where .env already existed and the
+# password variable was never assigned in this shell.
+USER_PG_ADMIN_PASSWORD=$(grep '^CP_USER_PG_ADMIN_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)
+for _ in $(seq 1 30); do
+  if docker compose exec -T user-postgres pg_isready -U iaiadmin >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+if docker compose exec -T user-postgres \
+     psql -U iaiadmin -d postgres \
+       -c "ALTER USER iaiadmin WITH PASSWORD '${USER_PG_ADMIN_PASSWORD}'" >/dev/null; then
+  vd_ok "user-postgres admin password synced"
+else
+  vd_err "user-postgres password sync failed (control-plane provisioning may fail)"
+fi
+
 # 8. Wait for control-plane health ------------------------------------------
 vd_info "waiting for control-plane to be healthy"
 if ! vd_wait_url "http://127.0.0.1:8080/healthz" 120; then

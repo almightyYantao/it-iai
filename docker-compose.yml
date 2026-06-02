@@ -29,15 +29,21 @@ services:
     #     additions vanish when the container recycles).
     #   * requirepass and aclfile are mutually exclusive — when aclfile is on,
     #     the default user's password lives inside the ACL file.
-    #   * The entrypoint bootstrap creates the ACL file with the admin password
-    #     baked in if it doesn't exist (first-boot only). Subsequent ACL
-    #     SETUSER calls from control-plane mutate the file in place.
+    #   * The entrypoint sync the `default` user's line from CP_USER_REDIS_ADMIN_PASSWORD
+    #     on every boot, then preserves any project ACL entries (user proj-* …)
+    #     that control-plane has appended via ACL SETUSER.
     entrypoint:
       - sh
       - -c
       - |
-        if [ ! -s /data/users.acl ]; then
-          echo "user default on >$$CP_USER_REDIS_ADMIN_PASSWORD ~* &* +@all" > /data/users.acl
+        : "$${CP_USER_REDIS_ADMIN_PASSWORD:?CP_USER_REDIS_ADMIN_PASSWORD must be set}"
+        NEW_LINE="user default on >$$CP_USER_REDIS_ADMIN_PASSWORD ~* &* +@all"
+        if [ -s /data/users.acl ]; then
+          grep -v '^user default' /data/users.acl > /data/users.acl.new || true
+          echo "$$NEW_LINE" >> /data/users.acl.new
+          mv /data/users.acl.new /data/users.acl
+        else
+          echo "$$NEW_LINE" > /data/users.acl
         fi
         exec redis-server --aclfile /data/users.acl --save 60 1
     ports:
