@@ -29,6 +29,23 @@ var middlewareGVR = schema.GroupVersionResource{
 	Resource: "middlewares",
 }
 
+// IngressRoute is the Traefik CRD for path-prefix routing with per-route
+// middleware chains. We emit one IngressRoute per project alongside the
+// existing native Ingress: the Ingress keeps owning the default `/` route
+// (and cert-manager TLS bootstrap), while the IngressRoute adds higher-
+// priority routes for path-rule overrides like /api/webhook/* → no_auth.
+// Only emitted when the project has at least one path rule.
+var ingressRouteGVR = schema.GroupVersionResource{
+	Group:    "traefik.io",
+	Version:  "v1alpha1",
+	Resource: "ingressroutes",
+}
+
+// Name of the cluster-wide Middleware CRD that ForwardAuths to control-plane's
+// /v1/_internal/verify-api-token. Created once at platform install time
+// (deploy/install-platform.sh) so we just reference it by name here.
+const apiTokenVerifyMiddlewareRef = "oauth2-proxy-iai-api-token-verify@kubernetescrd"
+
 type Deployer struct {
 	cs            *kubernetes.Clientset
 	dyn           dynamic.Interface // for Traefik Middleware CRs we don't import directly
@@ -400,6 +417,19 @@ type IngressHostsInput struct {
 	// hostname and writes the cert into a per-project Secret that Traefik
 	// reads from automatically.
 	TLSEnabled bool
+	// PathRules — when non-empty, an IngressRoute is emitted alongside the
+	// default Ingress with one higher-priority route per rule. Each rule
+	// overrides the project's default SSO gate for requests whose path starts
+	// with PathPrefix. Empty / nil drops the IngressRoute if it existed.
+	PathRules []PathRule
+}
+
+// PathRule mirrors model.ProjectPathRule but only the bits the deployer cares
+// about — slug-scoped, no IDs or timestamps. Mode is one of "no_auth" or
+// "token".
+type PathRule struct {
+	PathPrefix string
+	Mode       string
 }
 
 // SyncIngressHostnames replaces the project's Ingress rules with one rule per
@@ -433,7 +463,126 @@ func (d *Deployer) SyncIngressHostnames(ctx context.Context, in IngressHostsInpu
 			"oauth2-proxy-forward-auth@kubernetescrd",
 		)
 	}
-	return d.writeIngressWithMiddlewareChain(ctx, in.Slug, in.Hostnames, refs, in.TLSEnabled)
+	if err := d.writeIngressWithMiddlewareChain(ctx, in.Slug, in.Hostnames, refs, in.TLSEnabled); err != nil {
+		return err
+	}
+	// Path-prefix overrides ride on a parallel IngressRoute. The Ingress above
+	// stays the catch-all (and TLS source); the IngressRoute only matters when
+	// rules are present. Failures here don't roll back the Ingress — owners
+	// just lose the overrides; the default route still serves traffic.
+	if err := d.syncPathRuleIngressRoute(ctx, in.Slug, in.Hostnames, in.PathRules); err != nil {
+		return fmt.Errorf("sync path-rule IngressRoute: %w", err)
+	}
+	return nil
+}
+
+// syncPathRuleIngressRoute creates or deletes the per-project IngressRoute
+// that carries path-prefix overrides. When rules is empty the IngressRoute is
+// deleted so removing the last rule cleanly takes the routes out of traefik.
+// Routes are ordered longest-prefix-first via explicit priorities so the most
+// specific match wins regardless of insertion order.
+func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, hosts []string, rules []PathRule) error {
+	ns := d.namespaceFor(slug)
+	name := "app-overrides"
+
+	if len(rules) == 0 || len(hosts) == 0 {
+		err := d.dyn.Resource(ingressRouteGVR).Namespace(ns).Delete(ctx, name, metav1.DeleteOptions{})
+		if err != nil && !apierr.IsNotFound(err) {
+			return fmt.Errorf("delete IngressRoute: %w", err)
+		}
+		return nil
+	}
+
+	// Sort rules longest-prefix-first so traefik's explicit priority picks the
+	// most specific match even if the caller fed us rules in arbitrary order.
+	ordered := append([]PathRule(nil), rules...)
+	for i := 0; i < len(ordered); i++ {
+		for j := i + 1; j < len(ordered); j++ {
+			if len(ordered[j].PathPrefix) > len(ordered[i].PathPrefix) {
+				ordered[i], ordered[j] = ordered[j], ordered[i]
+			}
+		}
+	}
+
+	// Quote each host for the traefik matcher. Traefik backtick-strings; we
+	// fmt.Sprintf so the surrounding `…` are literal in the YAML.
+	hostList := make([]string, 0, len(hosts))
+	for _, h := range hosts {
+		hostList = append(hostList, fmt.Sprintf("`%s`", h))
+	}
+	hostMatch := "Host(" + strings.Join(hostList, ", ") + ")"
+
+	allowListMW := map[string]any{
+		"name":      allowListMiddlewareName(slug),
+		"namespace": ns,
+	}
+
+	routes := make([]any, 0, len(ordered))
+	// Higher priority numbers win in traefik. Start high enough to beat the
+	// default Ingress's implicit priority (which is len(host)+len(path) ≈ low
+	// hundreds) and decrement by prefix length so longer prefixes still win
+	// within the IngressRoute itself.
+	const basePriority = 100_000
+	for i, rule := range ordered {
+		mws := []any{allowListMW}
+		switch rule.Mode {
+		case "token":
+			// allow-list is in-project; api-token-verify is cluster-wide so we
+			// need its namespace explicit in the middlewareRef.
+			mws = append(mws, map[string]any{
+				"name":      "iai-api-token-verify",
+				"namespace": "oauth2-proxy",
+			})
+		case "no_auth":
+			// no extra middleware — just the allow-list
+		default:
+			return fmt.Errorf("unknown path rule mode %q for %s", rule.Mode, rule.PathPrefix)
+		}
+		routes = append(routes, map[string]any{
+			"match":    fmt.Sprintf("%s && PathPrefix(`%s`)", hostMatch, rule.PathPrefix),
+			"kind":     "Rule",
+			"priority": basePriority - i, // tie-break: earlier (longer) prefix wins
+			"services": []any{map[string]any{
+				"name": "app",
+				"port": 80,
+			}},
+			"middlewares": mws,
+		})
+	}
+
+	body := &unstructured.Unstructured{
+		Object: map[string]any{
+			"apiVersion": "traefik.io/v1alpha1",
+			"kind":       "IngressRoute",
+			"metadata": map[string]any{
+				"name":      name,
+				"namespace": ns,
+				"labels":    appLabels(slug),
+			},
+			"spec": map[string]any{
+				"entryPoints": []any{"web", "websecure"},
+				"routes":      routes,
+			},
+		},
+	}
+
+	cur, err := d.dyn.Resource(ingressRouteGVR).Namespace(ns).Get(ctx, name, metav1.GetOptions{})
+	if apierr.IsNotFound(err) {
+		_, err = d.dyn.Resource(ingressRouteGVR).Namespace(ns).Create(ctx, body, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("create IngressRoute: %w", err)
+		}
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get IngressRoute: %w", err)
+	}
+	body.SetResourceVersion(cur.GetResourceVersion())
+	_, err = d.dyn.Resource(ingressRouteGVR).Namespace(ns).Update(ctx, body, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("update IngressRoute: %w", err)
+	}
+	return nil
 }
 
 // allowListMiddlewareName: stable per-project name so successive syncs update

@@ -419,6 +419,49 @@ if ! vd_wait_url "http://127.0.0.1:8080/healthz" 120; then
 fi
 vd_ok "control-plane is healthy"
 
+# 8b. Cluster-side bridge for the API-token verify middleware -------------
+# Path rules in "token" mode forward incoming requests through a traefik
+# Middleware that calls control-plane's /v1/_internal/verify-api-token. The
+# Middleware needs an in-cluster Service to call; control-plane runs in
+# docker-compose, not k8s, so we install a selectorless Service + manual
+# Endpoints pointing at the platform host port (same pattern as admin-ui).
+vd_info "wiring cluster → control-plane bridge for api-token-verify"
+kubectl apply -f - >/dev/null <<YAML || vd_err "api-token-verify bridge apply failed (path-rule token mode won't work)"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: it-iai-control-plane
+  namespace: oauth2-proxy
+  labels: { vibedeploy.io/managed: "true" }
+spec:
+  ports:
+    - { name: http, port: 8080, targetPort: 8080, protocol: TCP }
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: it-iai-control-plane
+  namespace: oauth2-proxy
+  labels: { vibedeploy.io/managed: "true" }
+subsets:
+  - addresses: [{ ip: ${PLATFORM_IP} }]
+    ports:
+      - { name: http, port: 8080, protocol: TCP }
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: iai-api-token-verify
+  namespace: oauth2-proxy
+  labels: { vibedeploy.io/managed: "true" }
+spec:
+  forwardAuth:
+    address: http://it-iai-control-plane.oauth2-proxy.svc.cluster.local:8080/v1/_internal/verify-api-token
+    trustForwardHeader: true
+YAML
+vd_ok "api-token-verify bridge applied"
+
 # 9. Extract bootstrap token -------------------------------------------------
 TOKEN=""
 for _ in $(seq 1 30); do

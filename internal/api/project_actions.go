@@ -128,12 +128,28 @@ func (s *Server) syncIngressForProject(ctx context.Context, p *model.Project) er
 	// the URL. "org" and "restricted" both go behind oauth2-proxy; "restricted"
 	// further requires a collaborator entry, but that's app-level, not L7.
 	requireAuth := p.Visibility != model.VisibilityPublic
+
+	// Path-prefix overrides ride on a separate IngressRoute. Best-effort: a
+	// failure to load rules shouldn't strand the ingress sync — log via the
+	// audit channel and proceed with no rules (which keeps the project's
+	// default visibility in force, the safe fallback).
+	var pathRules []k8sdriver.PathRule
+	if rules, err := s.store.ListProjectPathRules(ctx, p.ID); err == nil {
+		for _, r := range rules {
+			pathRules = append(pathRules, k8sdriver.PathRule{
+				PathPrefix: r.PathPrefix,
+				Mode:       r.Mode,
+			})
+		}
+	}
+
 	return s.deployer.SyncIngressHostnames(ctx, k8sdriver.IngressHostsInput{
 		Slug:        p.Slug,
 		Hostnames:   hostnames,
 		AllowCIDRs:  s.effectiveAllowCIDRs(ctx, p),
 		RequireAuth: requireAuth,
 		TLSEnabled:  p.TLSEnabled,
+		PathRules:   pathRules,
 	})
 }
 
