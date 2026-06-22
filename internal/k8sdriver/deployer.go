@@ -504,13 +504,17 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 		}
 	}
 
-	// Quote each host for the traefik matcher. Traefik backtick-strings; we
-	// fmt.Sprintf so the surrounding `…` are literal in the YAML.
+	// Build the Host(…) matcher. Traefik v3 takes exactly one host per
+	// Host(…) call, so multi-host projects need an OR chain. Wrap in parens
+	// so the surrounding && PathPrefix(…) binds the way we want.
 	hostList := make([]string, 0, len(hosts))
 	for _, h := range hosts {
-		hostList = append(hostList, fmt.Sprintf("`%s`", h))
+		hostList = append(hostList, fmt.Sprintf("Host(`%s`)", h))
 	}
-	hostMatch := "Host(" + strings.Join(hostList, ", ") + ")"
+	hostMatch := hostList[0]
+	if len(hostList) > 1 {
+		hostMatch = "(" + strings.Join(hostList, " || ") + ")"
+	}
 
 	allowListMW := map[string]any{
 		"name":      allowListMiddlewareName(slug),

@@ -171,6 +171,15 @@ metadata:
   namespace: kube-system
 spec:
   valuesContent: |-
+    # Allow IngressRoute resources in project namespaces to reference cluster-
+    # wide middlewares (oauth2-proxy/forward-auth, oauth2-proxy/iai-api-token-
+    # verify, …). Without this traefik v3 rejects the IngressRoute and the
+    # project's path-prefix overrides don't take effect. Native Ingress
+    # already uses the annotation form which is governed by a different
+    # provider flag, so this only affects CRD-based IngressRoute.
+    providers:
+      kubernetesCRD:
+        allowCrossNamespace: true
     # DaemonSet — one Traefik per node so any node's :80 routes traffic,
     # regardless of which node a project pod lands on.
     deployment:
