@@ -206,6 +206,34 @@ type ProjectHealthRow struct {
 	Status string
 }
 
+// ListProjectsForIngressSweep returns the full project rows the startup ingress
+// sweep needs to re-apply k8s ingress + middleware after any DB → cluster drift
+// (typically: a migration flipped tls_enabled, but the projects' ingresses
+// still have the old cert-manager annotation state).
+//
+// Skips 'created' (no deployment + no ingress yet) and 'deleting' (transient
+// teardown). Matches ListProjectsForHealthReconcile's filter so the two stay
+// consistent.
+func (s *Store) ListProjectsForIngressSweep(ctx context.Context) ([]*model.Project, error) {
+	q := `SELECT ` + projectCols + `
+	      FROM projects
+	      WHERE deleted_at IS NULL AND status IN ('running','stopped','error')`
+	rows, err := s.Pool.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*model.Project
+	for rows.Next() {
+		var p model.Project
+		if err := scanProject(rows, &p); err != nil {
+			return nil, err
+		}
+		out = append(out, &p)
+	}
+	return out, rows.Err()
+}
+
 // ListProjectsForHealthReconcile returns projects we should periodically probe.
 // Skips 'created' (never deployed) and 'deleting' (transient) — those statuses
 // are owned by other code paths.

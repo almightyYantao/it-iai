@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -74,6 +75,39 @@ func normaliseCIDRs(raws []string) ([]string, error) {
 // errPresetIsSystem exposes the store error to the API layer without leaking
 // the dependency in every handler.
 var errPresetIsSystem = store.ErrPresetIsSystem
+
+// SweepIngressesAtStartup re-applies the ingress + middleware for every live
+// project once at startup, so any DB → cluster drift introduced by a migration
+// (most commonly the tls_enabled default flip in 0008) gets reconciled without
+// waiting for a redeploy or a manual toggle. Idempotent — hitting an
+// already-correct ingress just writes the same yaml.
+//
+// Failures on a single project are logged and skipped; the sweep keeps going
+// so one broken project can't strand the rest.
+func (s *Server) SweepIngressesAtStartup(ctx context.Context) {
+	if s.deployer == nil {
+		return
+	}
+	projects, err := s.store.ListProjectsForIngressSweep(ctx)
+	if err != nil {
+		log.Printf("ingress sweep: list projects: %v", err)
+		return
+	}
+	if len(projects) == 0 {
+		return
+	}
+	log.Printf("ingress sweep: reconciling %d project(s)", len(projects))
+	var ok, fail int
+	for _, p := range projects {
+		if err := s.syncIngressForProject(ctx, p); err != nil {
+			fail++
+			log.Printf("ingress sweep: %s: %v", p.Slug, err)
+			continue
+		}
+		ok++
+	}
+	log.Printf("ingress sweep: done (%d ok, %d failed)", ok, fail)
+}
 
 // syncIngressForProject rebuilds the project's ingress (default subdomain +
 // custom domains) and reapplies the IP allow-list Middleware + the cluster-

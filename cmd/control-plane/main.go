@@ -111,6 +111,10 @@ func runServer() {
 	server := api.NewServer(cfg, s, jwt, kek, obj, dep, bus, rt)
 	if dep != nil {
 		go api.NewReconciler(server).Run(ctx)
+		// One-shot ingress sweep so a migration-level change to tls_enabled
+		// (or any DB → cluster drift) gets reflected without waiting on a
+		// redeploy. Runs in the background to avoid delaying the HTTP listen.
+		go server.SweepIngressesAtStartup(ctx)
 	}
 
 	httpSrv := &http.Server{
