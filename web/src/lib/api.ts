@@ -119,6 +119,19 @@ export const api = {
       { enabled },
     ),
 
+  // setProjectVisibility switches between the three SSO-gating modes:
+  //   - "org"        any Longbridge SSO user can reach the URL.
+  //   - "restricted" Longbridge SSO + project collaborator allow-list.
+  //   - "public"     no SSO at all (open to anyone on the network).
+  // Server re-syncs the ingress immediately so the change is live within
+  // ~1s on the cluster.
+  setProjectVisibility: (slug: string, visibility: "org" | "restricted" | "public") =>
+    request<{ ok: boolean; visibility: string }>(
+      "PATCH",
+      `/v1/projects/${encodeURIComponent(slug)}/visibility`,
+      { visibility },
+    ),
+
   listCIDRPresets: () =>
     request<{ presets: CIDRPreset[] }>("GET", "/v1/admin/cidr-presets"),
   upsertCIDRPreset: (name: string, p: { label: string; description: string; cidrs: string[] }) =>

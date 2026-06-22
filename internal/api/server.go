@@ -115,6 +115,7 @@ func (s *Server) Routes() http.Handler {
 				r.Patch("/access", s.handlePatchProjectAccess)
 				r.Patch("/tls", s.handlePatchProjectTLS)
 				r.Patch("/name", s.handlePatchProjectName)
+				r.Patch("/visibility", s.handlePatchProjectVisibility)
 				r.Route("/deployments", func(r chi.Router) {
 					r.Post("/", s.handleCreateDeployment)
 					r.Get("/", s.handleListDeployments)

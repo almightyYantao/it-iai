@@ -367,6 +367,64 @@ func (s *Server) handlePatchProjectTLS(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// PATCH /v1/projects/:slug/visibility
+//
+// Body: { "visibility": "org" | "restricted" | "public" }
+//
+// Switches the SSO gating mode for the project:
+//
+//   - org        traffic must carry a valid Longbridge OIDC cookie (any
+//                Keycloak-issued user passes).
+//   - restricted same as org plus an app-level collaborator check.
+//   - public     no auth at all — anyone on the network reaches the app.
+//
+// Owner or admin only. Triggers an immediate ingress re-sync so the
+// ForwardAuth middleware is added or removed without waiting for a redeploy.
+func (s *Server) handlePatchProjectVisibility(w http.ResponseWriter, r *http.Request) {
+	p := projectFrom(r.Context())
+	actor, _ := ActorFrom(r.Context())
+	if !s.canManageProject(actor, p) {
+		writeError(w, http.StatusForbidden, "not_authorised", "only the project owner or an admin can change visibility")
+		return
+	}
+
+	var body struct {
+		Visibility string `json:"visibility"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_json", err.Error())
+		return
+	}
+	v := model.Visibility(body.Visibility)
+	switch v {
+	case model.VisibilityOrg, model.VisibilityRestricted, model.VisibilityPublic:
+	default:
+		writeError(w, http.StatusBadRequest, "bad_visibility", "visibility must be one of: org, restricted, public")
+		return
+	}
+
+	ctx := r.Context()
+	old := p.Visibility
+	if err := s.store.SetProjectVisibility(ctx, p.ID, v); err != nil {
+		writeError(w, http.StatusInternalServerError, "db", err.Error())
+		return
+	}
+	p.Visibility = v
+
+	if err := s.syncIngressForProject(ctx, p); err != nil {
+		writeError(w, http.StatusInternalServerError, "ingress_sync", err.Error())
+		return
+	}
+
+	s.store.WriteAudit(ctx, string(actor.Kind), actor.identityString(),
+		"project.visibility.update", &p.ID, map[string]any{"old": string(old), "new": string(v)})
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"visibility": string(v),
+	})
+}
+
 // DELETE /v1/projects/:slug
 //
 // Soft-deletes the project (deleted_at + status=deleting) and tears down the

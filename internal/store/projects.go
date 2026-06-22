@@ -105,6 +105,16 @@ func (s *Store) SetProjectTLSEnabled(ctx context.Context, id uuid.UUID, enabled 
 	return err
 }
 
+// SetProjectVisibility updates the SSO-gating mode. The reconciler rewrites
+// the ingress + ForwardAuth middleware chain so the change reaches traefik on
+// the next syncIngressForProject. Value is validated at the API layer
+// against model.Visibility — the column has no DB-level CHECK.
+func (s *Store) SetProjectVisibility(ctx context.Context, id uuid.UUID, v model.Visibility) error {
+	_, err := s.Pool.Exec(ctx,
+		`UPDATE projects SET visibility = $2 WHERE id = $1`, id, string(v))
+	return err
+}
+
 // SetProjectAccessPreset points a project at a named preset. Pass an empty
 // string / nil to clear it (project falls back to its own allow_cidrs).
 // The FK with ON DELETE SET NULL means callers don't need to scrub references

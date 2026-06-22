@@ -101,6 +101,21 @@ export function ProjectAccessPanel({
     onError: (err) => setOpError(err instanceof ApiError ? err.message : String(err)),
   });
 
+  // Visibility is a single-dropdown setting with a much higher blast radius
+  // than a CIDR list (switching to "public" removes SSO entirely). Save
+  // immediately on change so the change is obvious, but show inline feedback.
+  const saveVisibility = useMutation({
+    mutationFn: (next: "org" | "restricted" | "public") =>
+      api.setProjectVisibility(slug, next),
+    onSuccess: () => {
+      setOpError(null);
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1800);
+      qc.invalidateQueries({ queryKey: ["project", slug] });
+    },
+    onError: (err) => setOpError(err instanceof ApiError ? err.message : String(err)),
+  });
+
   function reset() {
     setMode(initialPreset ?? CUSTOM);
     setCustomDraft(initialCIDRs.join("\n"));
@@ -136,7 +151,36 @@ export function ProjectAccessPanel({
       </header>
 
       <div className="px-5 py-4 space-y-4">
-        {/* Mode selector */}
+        {/* Visibility selector — controls Longbridge SSO gating. Saved immediately
+            on change because (a) it's a single dropdown so a Save button is
+            redundant noise and (b) the change is high-impact enough that
+            users should see the result without an extra click. */}
+        <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-x-6 gap-y-1.5">
+          <label className="pt-1.5 text-[12.5px] font-medium text-ink-DEFAULT">
+            {t("access.visibility.label")}
+          </label>
+          <div>
+            <select
+              value={visibility}
+              onChange={(e) => saveVisibility.mutate(e.target.value as "org" | "restricted" | "public")}
+              disabled={!canEdit || saveVisibility.isPending}
+              className="w-full rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] text-ink-strong focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand disabled:opacity-60"
+            >
+              <option value="org">{t("access.visibility.org")}</option>
+              <option value="restricted">{t("access.visibility.restricted")}</option>
+              <option value="public">{t("access.visibility.public")}</option>
+            </select>
+            <p className="mt-1.5 text-[11.5px] text-ink-faint leading-relaxed">
+              {visibility === "public"
+                ? t("access.visibility.public.hint")
+                : visibility === "restricted"
+                  ? t("access.visibility.restricted.hint")
+                  : t("access.visibility.org.hint")}
+            </p>
+          </div>
+        </div>
+
+        {/* CIDR mode selector */}
         <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-x-6 gap-y-1.5">
           <label className="pt-1.5 text-[12.5px] font-medium text-ink-DEFAULT">
             {t("access.mode.label")}

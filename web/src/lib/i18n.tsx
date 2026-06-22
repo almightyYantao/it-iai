@@ -187,6 +187,16 @@ const zh: Dict = {
     "可见性不是 public —— Traefik 会通过 oauth2-proxy ForwardAuth 拦截未登录的请求并跳转到 {{brand}} 完成 SSO。",
   "access.auth.open": "免登录",
   "access.auth.open.hint": "可见性是 public，任何人都能直接访问。",
+  "access.visibility.label": "登录要求",
+  "access.visibility.org": "任何 {{brand}} 账号可访问",
+  "access.visibility.org.hint":
+    "默认。访问时必须先用 {{brand}} 账号完成 SSO，不限制具体哪个员工。",
+  "access.visibility.restricted": "仅限协作者",
+  "access.visibility.restricted.hint":
+    "SSO 之后还要在协作者名单里 —— 没加进来的同事即便登录了也会被拒。",
+  "access.visibility.public": "不需要登录",
+  "access.visibility.public.hint":
+    "完全不走 SSO —— 任何能解析到这个域名的人都能直接访问，请只用于面向公网的页面或需要免登录的 API。",
   "access.count.none.preset": "预设当前未配 IP",
   "access.count.none": "未设置任何 IP",
   "access.count.n": "{{n}} 条规则",
@@ -643,6 +653,16 @@ const en: Dict = {
     "Visibility isn't public — Traefik intercepts unauthenticated requests via oauth2-proxy ForwardAuth and bounces them through {{brand}} SSO.",
   "access.auth.open": "No login",
   "access.auth.open.hint": "Visibility is public — anyone can reach the app directly.",
+  "access.visibility.label": "Login requirement",
+  "access.visibility.org": "Any {{brand}} account",
+  "access.visibility.org.hint":
+    "Default. Visitors must sign in with their {{brand}} account; no per-user allow-list.",
+  "access.visibility.restricted": "Collaborators only",
+  "access.visibility.restricted.hint":
+    "Sign-in plus an allow-list — colleagues not on the collaborator list are blocked even after SSO.",
+  "access.visibility.public": "No login required",
+  "access.visibility.public.hint":
+    "Skips SSO entirely. Anyone who can resolve this hostname can reach the app — use only for public pages or API endpoints that must accept anonymous traffic.",
   "access.count.none.preset": "preset has no IPs configured",
   "access.count.none": "No IPs configured",
   "access.count.n": "{{n}} rule(s)",
