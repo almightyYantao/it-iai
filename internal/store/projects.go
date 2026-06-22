@@ -31,14 +31,26 @@ func (s *Store) UpsertUserByEmail(ctx context.Context, email, name string) (*mod
 
 // Project SELECT columns kept as a single string so every read site stays in
 // sync — adding columns without this forces touching every Scan site.
-const projectCols = `id, slug, name, owner_id, visibility, status, manifest, allow_cidrs, access_preset, tls_enabled, created_at, last_pushed_at, last_active_at`
+// Note: api_token_hash is intentionally excluded. The hash never leaves the
+// store via the regular Project read path; verify-time code fetches it through
+// GetProjectAPITokenHash so the secret hash never sits on a Project struct
+// that's serialised to JSON.
+const projectCols = `id, slug, name, owner_id, visibility, status, manifest, allow_cidrs, access_preset, tls_enabled, api_token_prefix, api_token_created_at, created_at, last_pushed_at, last_active_at`
 
 func scanProject(row pgx.Row, p *model.Project) error {
-	return row.Scan(
+	var tokenPrefix *string
+	if err := row.Scan(
 		&p.ID, &p.Slug, &p.Name, &p.OwnerID, &p.Visibility, &p.Status,
 		&p.Manifest, &p.AllowCIDRs, &p.AccessPreset, &p.TLSEnabled,
+		&tokenPrefix, &p.APITokenCreatedAt,
 		&p.CreatedAt, &p.LastPushedAt, &p.LastActiveAt,
-	)
+	); err != nil {
+		return err
+	}
+	if tokenPrefix != nil {
+		p.APITokenPrefix = *tokenPrefix
+	}
+	return nil
 }
 
 func (s *Store) CreateProject(ctx context.Context, slug, name string, ownerID uuid.UUID, manifest json.RawMessage) (*model.Project, error) {
@@ -113,6 +125,38 @@ func (s *Store) SetProjectVisibility(ctx context.Context, id uuid.UUID, v model.
 	_, err := s.Pool.Exec(ctx,
 		`UPDATE projects SET visibility = $2 WHERE id = $1`, id, string(v))
 	return err
+}
+
+// SetProjectAPIToken persists a freshly-generated API token: sha256 hash for
+// verify-time comparison, prefix for UI display, and a timestamp. Passing all
+// nils clears the token (no-token = no API authentication available).
+func (s *Store) SetProjectAPIToken(ctx context.Context, id uuid.UUID, hash []byte, prefix string) error {
+	if hash == nil {
+		_, err := s.Pool.Exec(ctx,
+			`UPDATE projects SET api_token_hash = NULL, api_token_prefix = NULL,
+			                      api_token_created_at = NULL
+			  WHERE id = $1`, id)
+		return err
+	}
+	_, err := s.Pool.Exec(ctx,
+		`UPDATE projects SET api_token_hash = $2, api_token_prefix = $3,
+		                      api_token_created_at = now()
+		  WHERE id = $1`, id, hash, prefix)
+	return err
+}
+
+// GetProjectAPITokenHash returns the bcrypt-style hash for the project's API
+// token. Kept separate from the regular project read path so the hash never
+// rides along on Project structs that downstream code may serialise.
+// Returns (nil, nil) when the project has no token set.
+func (s *Store) GetProjectAPITokenHash(ctx context.Context, id uuid.UUID) ([]byte, error) {
+	var hash []byte
+	err := s.Pool.QueryRow(ctx,
+		`SELECT api_token_hash FROM projects WHERE id = $1`, id).Scan(&hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return hash, err
 }
 
 // SetProjectAccessPreset points a project at a named preset. Pass an empty

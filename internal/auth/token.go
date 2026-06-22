@@ -40,3 +40,30 @@ func HashToken(tok string) []byte {
 func LooksLikeDeployToken(tok string) bool {
 	return strings.HasPrefix(tok, TokenPrefix)
 }
+
+// Project API token format: iai_api_<43-char base64url>. Distinct prefix from
+// deploy tokens so the verifier and audit logs can tell them apart at a glance.
+const APITokenPrefix = "iai_api_"
+
+// GenerateAPIToken mints a fresh per-project API token. Returns
+// (plaintext, sha256-hash, display-prefix). The plaintext is the value the
+// owner copies into their integration — we keep only the hash + prefix and
+// never reconstruct the plaintext.
+func GenerateAPIToken() (string, []byte, string, error) {
+	var b [32]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", nil, "", err
+	}
+	body := base64.RawURLEncoding.EncodeToString(b[:])
+	tok := APITokenPrefix + body
+	h := sha256.Sum256([]byte(tok))
+	prefix := tok
+	if len(prefix) > 16 {
+		prefix = prefix[:16]
+	}
+	return tok, h[:], prefix, nil
+}
+
+func LooksLikeAPIToken(tok string) bool {
+	return strings.HasPrefix(tok, APITokenPrefix)
+}

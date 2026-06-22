@@ -97,11 +97,38 @@ type Project struct {
 	// platform needs cert-manager + a `letsencrypt-prod` ClusterIssuer for
 	// this to do anything (deploy/install-cert-manager.sh).
 	TLSEnabled    bool            `json:"tls_enabled"`
+	// APITokenPrefix is the first ~16 chars of the plaintext token, kept for
+	// UI display so owners can recognise which token a teammate has pasted
+	// somewhere. The hash itself is never exposed in JSON; the plaintext is
+	// returned exactly once at regeneration time and never re-derivable.
+	// Empty when the project has no API token yet.
+	APITokenPrefix    string     `json:"api_token_prefix,omitempty"`
+	APITokenCreatedAt *time.Time `json:"api_token_created_at,omitempty"`
 	CreatedAt     time.Time       `json:"created_at"`
 	LastPushedAt  *time.Time      `json:"last_pushed_at,omitempty"`
 	LastActiveAt  *time.Time      `json:"last_active_at,omitempty"`
 	URL           string          `json:"url,omitempty"` // computed
 }
+
+// ProjectPathRule overrides the project's default SSO gate for requests whose
+// URL path starts with PathPrefix. Longer prefixes win when multiple could
+// match; the deployer emits IngressRoute routes in that order.
+type ProjectPathRule struct {
+	ID         uuid.UUID `json:"id"`
+	ProjectID  uuid.UUID `json:"project_id"`
+	PathPrefix string    `json:"path_prefix"`
+	// Mode is one of: "no_auth" (skip ForwardAuth entirely, IP allow-list
+	// still applies) or "token" (require Authorization: Bearer <project api
+	// token>).
+	Mode      string    `json:"mode"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+const (
+	PathRuleModeNoAuth = "no_auth"
+	PathRuleModeToken  = "token"
+)
 
 type Deployment struct {
 	ID              uuid.UUID        `json:"id"`

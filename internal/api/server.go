@@ -79,8 +79,10 @@ func (s *Server) Routes() http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	})
 
-	// Internal endpoint for Traefik ForwardAuth (called only from cluster network).
+	// Internal endpoints for Traefik ForwardAuth (called only from cluster network).
 	r.Get("/internal/auth/check", s.handleAuthCheck)
+	// Token-mode path rule verification — see handleInternalVerifyAPIToken.
+	r.Get("/v1/_internal/verify-api-token", s.handleInternalVerifyAPIToken)
 
 	// OIDC code-flow endpoints — unauthenticated by design.
 	r.Get("/v1/auth/oidc-status",   s.handleOIDCStatus)
@@ -116,6 +118,14 @@ func (s *Server) Routes() http.Handler {
 				r.Patch("/tls", s.handlePatchProjectTLS)
 				r.Patch("/name", s.handlePatchProjectName)
 				r.Patch("/visibility", s.handlePatchProjectVisibility)
+				r.Post("/api-token", s.handleRegenerateProjectAPIToken)
+				r.Delete("/api-token", s.handleRevokeProjectAPIToken)
+				r.Route("/path-rules", func(r chi.Router) {
+					r.Get("/", s.handleListPathRules)
+					r.Post("/", s.handleCreatePathRule)
+					r.Patch("/{id}", s.handleUpdatePathRule)
+					r.Delete("/{id}", s.handleDeletePathRule)
+				})
 				r.Route("/deployments", func(r chi.Router) {
 					r.Post("/", s.handleCreateDeployment)
 					r.Get("/", s.handleListDeployments)
