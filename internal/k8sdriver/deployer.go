@@ -470,7 +470,7 @@ func (d *Deployer) SyncIngressHostnames(ctx context.Context, in IngressHostsInpu
 	// stays the catch-all (and TLS source); the IngressRoute only matters when
 	// rules are present. Failures here don't roll back the Ingress — owners
 	// just lose the overrides; the default route still serves traffic.
-	if err := d.syncPathRuleIngressRoute(ctx, in.Slug, in.Hostnames, in.PathRules); err != nil {
+	if err := d.syncPathRuleIngressRoute(ctx, in.Slug, in.Hostnames, in.PathRules, in.TLSEnabled); err != nil {
 		return fmt.Errorf("sync path-rule IngressRoute: %w", err)
 	}
 	return nil
@@ -481,7 +481,7 @@ func (d *Deployer) SyncIngressHostnames(ctx context.Context, in IngressHostsInpu
 // deleted so removing the last rule cleanly takes the routes out of traefik.
 // Routes are ordered longest-prefix-first via explicit priorities so the most
 // specific match wins regardless of insertion order.
-func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, hosts []string, rules []PathRule) error {
+func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, hosts []string, rules []PathRule, tlsEnabled bool) error {
 	ns := d.namespaceFor(slug)
 	name := "app-overrides"
 
@@ -554,6 +554,17 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 		})
 	}
 
+	spec := map[string]any{
+		"entryPoints": []any{"web", "websecure"},
+		"routes":      routes,
+	}
+	// websecure routes without an explicit tls section are inactive (traefik
+	// can't pick a cert). Reuse the secret cert-manager already populates for
+	// the native Ingress — IngressRoute serves the same cert without
+	// duplicating cert lifecycle.
+	if tlsEnabled {
+		spec["tls"] = map[string]any{"secretName": "iai-tls-" + slug}
+	}
 	body := &unstructured.Unstructured{
 		Object: map[string]any{
 			"apiVersion": "traefik.io/v1alpha1",
@@ -563,10 +574,7 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 				"namespace": ns,
 				"labels":    appLabels(slug),
 			},
-			"spec": map[string]any{
-				"entryPoints": []any{"web", "websecure"},
-				"routes":      routes,
-			},
+			"spec": spec,
 		},
 	}
 
