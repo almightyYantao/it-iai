@@ -470,7 +470,12 @@ func (d *Deployer) SyncIngressHostnames(ctx context.Context, in IngressHostsInpu
 	// stays the catch-all (and TLS source); the IngressRoute only matters when
 	// rules are present. Failures here don't roll back the Ingress — owners
 	// just lose the overrides; the default route still serves traffic.
-	if err := d.syncPathRuleIngressRoute(ctx, in.Slug, in.Hostnames, in.PathRules, in.TLSEnabled); err != nil {
+	//
+	// allowListExists tells the IngressRoute whether to reference the per-
+	// project allow-list Middleware. mwName=="" means syncIPAllowList deleted
+	// it (empty CIDRs); referencing a missing CRD makes traefik reject the
+	// whole route and fall back to the catch-all Ingress, defeating the override.
+	if err := d.syncPathRuleIngressRoute(ctx, in.Slug, in.Hostnames, in.PathRules, in.TLSEnabled, mwName != ""); err != nil {
 		return fmt.Errorf("sync path-rule IngressRoute: %w", err)
 	}
 	return nil
@@ -481,7 +486,7 @@ func (d *Deployer) SyncIngressHostnames(ctx context.Context, in IngressHostsInpu
 // deleted so removing the last rule cleanly takes the routes out of traefik.
 // Routes are ordered longest-prefix-first via explicit priorities so the most
 // specific match wins regardless of insertion order.
-func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, hosts []string, rules []PathRule, tlsEnabled bool) error {
+func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, hosts []string, rules []PathRule, tlsEnabled, allowListExists bool) error {
 	ns := d.namespaceFor(slug)
 	name := "app-overrides"
 
@@ -516,9 +521,16 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 		hostMatch = "(" + strings.Join(hostList, " || ") + ")"
 	}
 
-	allowListMW := map[string]any{
-		"name":      allowListMiddlewareName(slug),
-		"namespace": ns,
+	// Only reference the allow-list Middleware when one actually exists for
+	// this project — referencing a missing CRD makes traefik reject the
+	// entire route and silently fall back to the catch-all Ingress, which
+	// defeats the whole point of the override.
+	var baseMWs []any
+	if allowListExists {
+		baseMWs = append(baseMWs, map[string]any{
+			"name":      allowListMiddlewareName(slug),
+			"namespace": ns,
+		})
 	}
 
 	routes := make([]any, 0, len(ordered))
@@ -528,7 +540,7 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 	// within the IngressRoute itself.
 	const basePriority = 100_000
 	for i, rule := range ordered {
-		mws := []any{allowListMW}
+		mws := append([]any(nil), baseMWs...)
 		switch rule.Mode {
 		case "token":
 			// allow-list is in-project; api-token-verify is cluster-wide so we
