@@ -119,6 +119,53 @@ export const api = {
       { enabled },
     ),
 
+  // regenerateProjectAPIToken mints a fresh project-level API token. The
+  // plaintext comes back in the response exactly once — store it somewhere
+  // safe immediately; only the hash and prefix are persisted server-side.
+  regenerateProjectAPIToken: (slug: string) =>
+    request<{ token: string; prefix: string }>(
+      "POST",
+      `/v1/projects/${encodeURIComponent(slug)}/api-token`,
+      {},
+    ),
+
+  // revokeProjectAPIToken clears the token. Existing token holders 401 from
+  // any token-mode path rule on the next request.
+  revokeProjectAPIToken: (slug: string) =>
+    request<{ ok: boolean }>(
+      "DELETE",
+      `/v1/projects/${encodeURIComponent(slug)}/api-token`,
+    ),
+
+  // Project path-rules CRUD. The list / create / update / delete shape mirrors
+  // the backend handlers in internal/api/path_rules.go.
+  listProjectPathRules: (slug: string) =>
+    request<{ rules: import("./types").ProjectPathRule[] }>(
+      "GET",
+      `/v1/projects/${encodeURIComponent(slug)}/path-rules`,
+    ),
+  createProjectPathRule: (slug: string, body: { path_prefix: string; mode: "no_auth" | "token" }) =>
+    request<{ rule: import("./types").ProjectPathRule }>(
+      "POST",
+      `/v1/projects/${encodeURIComponent(slug)}/path-rules`,
+      body,
+    ),
+  updateProjectPathRule: (
+    slug: string,
+    id: string,
+    body: { path_prefix: string; mode: "no_auth" | "token" },
+  ) =>
+    request<{ rule: import("./types").ProjectPathRule }>(
+      "PATCH",
+      `/v1/projects/${encodeURIComponent(slug)}/path-rules/${encodeURIComponent(id)}`,
+      body,
+    ),
+  deleteProjectPathRule: (slug: string, id: string) =>
+    request<{ ok: boolean }>(
+      "DELETE",
+      `/v1/projects/${encodeURIComponent(slug)}/path-rules/${encodeURIComponent(id)}`,
+    ),
+
   // setProjectVisibility switches between the three SSO-gating modes:
   //   - "org"        any Longbridge SSO user can reach the URL.
   //   - "restricted" Longbridge SSO + project collaborator allow-list.

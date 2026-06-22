@@ -37,9 +37,26 @@ export interface Project {
   // tls: section, so cert-manager issues a per-host Let's Encrypt cert.
   // Off by default. Requires deploy/install-cert-manager.sh on the platform.
   tls_enabled: boolean;
+  // Project-level API token. Prefix is the first ~16 chars of the plaintext
+  // (e.g. "iai_api_xx12yy"), kept so owners can recognise which token a
+  // teammate has pasted somewhere. Plaintext leaves the server exactly once
+  // on regenerate. Both nullable: a project without a token has neither.
+  api_token_prefix?: string | null;
+  api_token_created_at?: string | null;
   created_at: string;
   last_pushed_at?: string | null;
   last_active_at?: string | null;
+}
+
+// Per-path-prefix auth override. Each rule replaces the project's default
+// SSO gate for requests whose URL path starts with path_prefix.
+export interface ProjectPathRule {
+  id: string;
+  project_id: string;
+  path_prefix: string;
+  mode: "no_auth" | "token";
+  created_at: string;
+  updated_at: string;
 }
 
 export interface CIDRPreset {

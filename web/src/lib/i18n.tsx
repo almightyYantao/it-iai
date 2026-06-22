@@ -223,6 +223,39 @@ const zh: Dict = {
   "tls.label.enabled": "为本项目启用 HTTPS",
   "tls.state.on": "已启用",
   "tls.state.off": "未启用",
+
+  // API access (per-path overrides + project API token)
+  "apiAccess.title": "API 路径例外",
+  "apiAccess.desc":
+    "默认所有请求都走项目级登录策略。这里可以按 URL 前缀单独豁免：no_auth 完全跳过登录（仍走 IP 白名单），token 需要在 Authorization 头里带项目级 API token。最长前缀优先匹配。",
+  "apiAccess.token.label": "项目级 API token",
+  "apiAccess.token.none": "尚未生成 token —— 配置 token 模式之前需要先生成一个。",
+  "apiAccess.token.createdAt": "生成于 {{at}}",
+  "apiAccess.token.btn.create": "生成 token",
+  "apiAccess.token.btn.create.busy": "生成中…",
+  "apiAccess.token.btn.regen": "重新生成",
+  "apiAccess.token.btn.regen.busy": "重新生成中…",
+  "apiAccess.token.btn.revoke": "吊销",
+  "apiAccess.token.btn.revoke.busy": "吊销中…",
+  "apiAccess.token.confirmRevoke":
+    "吊销后任何使用该 token 的客户端立刻被 401 拒绝，并且无法恢复。是否继续？",
+  "apiAccess.rules.label": "路径规则",
+  "apiAccess.rules.loading": "加载中…",
+  "apiAccess.rules.empty": "暂无规则。所有路径都走项目级登录策略。",
+  "apiAccess.rules.warn.tokenButNoSecret":
+    "存在 token 模式的规则，但项目还没生成 API token —— 这些路径会全部 401。请先生成 token。",
+  "apiAccess.rules.mode.no_auth": "免登录",
+  "apiAccess.rules.mode.token": "Token",
+  "apiAccess.rules.input.placeholder": "/api/webhook/",
+  "apiAccess.rules.btn.add": "添加",
+  "apiAccess.rules.btn.add.busy": "添加中…",
+  "apiAccess.rules.btn.delete": "删除",
+  "apiAccess.reveal.title": "新的 API token",
+  "apiAccess.reveal.desc":
+    "这是 token 的明文，只展示这一次。复制到密码管理器或 CI 的 secret 里 —— 关掉这个对话框就再也找不回了。",
+  "apiAccess.reveal.copy": "复制",
+  "apiAccess.reveal.copied": "已复制",
+  "apiAccess.reveal.close": "关闭",
   "tls.hint.on":
     "新增的域名会在大约 30 秒后拿到证书。期间 HTTP 仍然可达；证书签发完成后浏览器才会看到绿锁。",
   "tls.hint.off":
@@ -692,6 +725,38 @@ const en: Dict = {
   "tls.hint.off":
     "The project is served over plain HTTP. Before flipping this on make sure DNS for every hostname resolves to the platform and :80 is reachable from the public internet — Let's Encrypt's validators come from outside.",
   "tls.toast.saved": "Saved — cert issuance runs in the background",
+
+  "apiAccess.title": "API path overrides",
+  "apiAccess.desc":
+    "By default every request goes through the project's login policy. Add per-path-prefix overrides here: no_auth skips SSO entirely (the IP allow-list still applies), token requires the project API token in the Authorization header. Longest prefix wins.",
+  "apiAccess.token.label": "Project API token",
+  "apiAccess.token.none": "No token yet — generate one before adding a token-mode rule.",
+  "apiAccess.token.createdAt": "issued {{at}}",
+  "apiAccess.token.btn.create": "Generate token",
+  "apiAccess.token.btn.create.busy": "Generating…",
+  "apiAccess.token.btn.regen": "Regenerate",
+  "apiAccess.token.btn.regen.busy": "Regenerating…",
+  "apiAccess.token.btn.revoke": "Revoke",
+  "apiAccess.token.btn.revoke.busy": "Revoking…",
+  "apiAccess.token.confirmRevoke":
+    "Revoking the token 401s every client using it immediately. There is no way to recover the value — you'd have to regenerate. Continue?",
+  "apiAccess.rules.label": "Path rules",
+  "apiAccess.rules.loading": "Loading…",
+  "apiAccess.rules.empty": "No rules. Every path follows the project's login policy.",
+  "apiAccess.rules.warn.tokenButNoSecret":
+    "There are token-mode rules but the project has no API token — those paths will 401 until you generate one.",
+  "apiAccess.rules.mode.no_auth": "No login",
+  "apiAccess.rules.mode.token": "Token",
+  "apiAccess.rules.input.placeholder": "/api/webhook/",
+  "apiAccess.rules.btn.add": "Add",
+  "apiAccess.rules.btn.add.busy": "Adding…",
+  "apiAccess.rules.btn.delete": "Delete",
+  "apiAccess.reveal.title": "New API token",
+  "apiAccess.reveal.desc":
+    "Plaintext shown exactly once. Copy it into your password manager or CI secret store now — once you close this dialog it can't be recovered.",
+  "apiAccess.reveal.copy": "Copy",
+  "apiAccess.reveal.copied": "Copied",
+  "apiAccess.reveal.close": "Close",
 
   "danger.title": "Danger zone",
   "danger.delete.desc":

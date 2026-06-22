@@ -15,6 +15,7 @@ import { EnvPanel } from "../components/EnvPanel";
 import { ProjectAccessPanel } from "../components/ProjectAccessPanel";
 import { ProjectNamePanel } from "../components/ProjectNamePanel";
 import { ProjectTLSPanel } from "../components/ProjectTLSPanel";
+import { ProjectAPIAccessPanel } from "../components/ProjectAPIAccessPanel";
 import { ExternalIcon, LayersIcon } from "../components/icons";
 import { shortID, timeAgo } from "../lib/format";
 
@@ -225,6 +226,15 @@ export function ProjectDetail() {
         <ProjectTLSPanel
           slug={slug}
           initialEnabled={p.tls_enabled ?? false}
+          canEdit={canManage}
+        />
+      </div>
+
+      <div className="mt-8">
+        <ProjectAPIAccessPanel
+          slug={slug}
+          initialTokenPrefix={p.api_token_prefix}
+          initialTokenCreatedAt={p.api_token_created_at}
           canEdit={canManage}
         />
       </div>
