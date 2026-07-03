@@ -997,13 +997,38 @@ func (d *Deployer) TailFailedPodLogs(ctx context.Context, slug string, tailLines
 		defer r.Close()
 		var buf strings.Builder
 		_, _ = copyTo(&buf, r)
-		return strings.TrimRight(buf.String(), "\n")
-	}
-
-	if out := fetch(true); out != "" {
+		out := strings.TrimRight(buf.String(), "\n")
+		// kubelet returns HTTP 200 with an error-shaped body when it hits the
+		// container just as the runtime has GC'd or hasn't yet flushed the log
+		// file. Treat those as "no log yet" so the retry logic below can
+		// re-poll instead of dumping the sentinel into the event stream.
+		if strings.HasPrefix(out, "unable to retrieve container logs") ||
+			strings.HasPrefix(out, "failed to try resolving symlinks in path") {
+			return ""
+		}
 		return out
 	}
-	return fetch(false)
+
+	// Small retry loop — right at the terminal instant kubelet often hasn't
+	// finished writing/flushing the log. Two extra tries at 1s intervals
+	// cost nothing and rescue the common case; we still bail out cleanly if
+	// the container really left no output at all.
+	for attempt := 0; attempt < 3; attempt++ {
+		if out := fetch(true); out != "" {
+			return out
+		}
+		if out := fetch(false); out != "" {
+			return out
+		}
+		if attempt < 2 {
+			select {
+			case <-time.After(time.Second):
+			case <-ctx.Done():
+				return ""
+			}
+		}
+	}
+	return ""
 }
 
 func (d *Deployer) TailLogs(ctx context.Context, slug string, tailLines int64) (string, error) {
