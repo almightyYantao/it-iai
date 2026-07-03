@@ -958,6 +958,54 @@ func (d *Deployer) PodPlacement(ctx context.Context, slug string) (*PodPlacement
 }
 
 // TailLogs returns the last `tailLines` lines of the latest pod for the project.
+// TailFailedPodLogs fetches the last N lines from the newest pod's "app"
+// container to enrich the deployment failure event with the actual stderr /
+// stdout the app printed before it exited. For CrashLoopBackOff we care about
+// the *previous* container's log (the one that crashed) — the current
+// container is either not started yet or already terminated with empty log.
+// Falls back to the current container's log when previous is empty (e.g. the
+// pod is stuck in ImagePullBackOff and never actually ran).
+//
+// Always best-effort — returns an empty string on any error rather than
+// polluting the caller with an actionable error, since the caller is
+// already in the middle of reporting a different failure.
+func (d *Deployer) TailFailedPodLogs(ctx context.Context, slug string, tailLines int64) string {
+	ns := d.namespaceFor(slug)
+	pods, err := d.cs.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: "app=" + slug})
+	if err != nil || len(pods.Items) == 0 {
+		return ""
+	}
+	// Pick the newest pod — same rule as PodSummary — so we grab the failing
+	// one, not a lingering pre-rollout survivor.
+	pod := pods.Items[0]
+	for i := 1; i < len(pods.Items); i++ {
+		if pods.Items[i].CreationTimestamp.After(pod.CreationTimestamp.Time) {
+			pod = pods.Items[i]
+		}
+	}
+
+	fetch := func(previous bool) string {
+		req := d.cs.CoreV1().Pods(ns).GetLogs(pod.Name, &corev1.PodLogOptions{
+			Container: "app",
+			TailLines: &tailLines,
+			Previous:  previous,
+		})
+		r, err := req.Stream(ctx)
+		if err != nil {
+			return ""
+		}
+		defer r.Close()
+		var buf strings.Builder
+		_, _ = copyTo(&buf, r)
+		return strings.TrimRight(buf.String(), "\n")
+	}
+
+	if out := fetch(true); out != "" {
+		return out
+	}
+	return fetch(false)
+}
+
 func (d *Deployer) TailLogs(ctx context.Context, slug string, tailLines int64) (string, error) {
 	ns := d.namespaceFor(slug)
 	pods, err := d.cs.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: "app=" + slug})

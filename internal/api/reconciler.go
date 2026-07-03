@@ -325,6 +325,14 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 		}
 
 		if terminalReason != "" {
+			// Surface the actual container stderr/stdout so the failure event
+			// carries a real stack trace / message instead of just the vague
+			// "container exited (Error, code 1)". Best-effort: silently skip
+			// if we can't grab logs.
+			if tail := r.srv.deployer.TailFailedPodLogs(ctx, slug, 60); tail != "" {
+				_, _ = r.srv.store.AppendEvent(ctx, p.ID, "pod", "error",
+					"container log tail (last 60 lines):\n"+tail)
+			}
 			r.fail(ctx, p.ID, "pod_unhealthy", terminalReason)
 			r.mu.Lock()
 			delete(r.lastSummary, p.ID)
