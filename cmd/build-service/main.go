@@ -121,15 +121,66 @@ func run(ctx context.Context, s *store.Store, obj *storage.Client, bld *builder.
 	}
 	emit("build", "info", "source ready")
 
+	// Derive a cancellable context for the build so a watchdog can bail out
+	// on us mid-build. Motivation: when the owner pushes a new deployment
+	// while an old one is still building, SupersedeOlderDeployments flips
+	// the old one's DB status to 'superseded', but historically the docker
+	// buildx subprocess kept running — and if it hung, the concurrency slot
+	// was leaked forever (see recent whale-docs-b7k4 incident). Cancelling
+	// buildCtx propagates SIGKILL to the buildx child via exec.CommandContext.
+	buildCtx, cancelBuild := context.WithCancel(ctx)
+	defer cancelBuild()
+
+	watchdogDone := make(chan struct{})
+	go func() {
+		defer close(watchdogDone)
+		t := time.NewTicker(3 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-buildCtx.Done():
+				return
+			case <-t.C:
+				var status string
+				// Deliberately use context.Background — we don't want the
+				// poll itself to be cancelled by the very cancel it might
+				// need to trigger.
+				if err := s.Pool.QueryRow(context.Background(),
+					`SELECT status FROM deployments WHERE id = $1`, dep.ID).Scan(&status); err != nil {
+					continue
+				}
+				if status != string(model.DeployBuilding) {
+					log.Printf("watchdog: deployment %s moved to %q mid-build; cancelling", dep.ID, status)
+					cancelBuild()
+					return
+				}
+			}
+		}
+	}()
+
 	in := builder.Input{
 		DeploymentID: dep.ID.String(),
 		Slug:         slug,
 		SrcDir:       filepath.Join(workdir, "src"),
 	}
-	res, err := bld.Build(ctx, in, func(line string) {
+	res, err := bld.Build(buildCtx, in, func(line string) {
 		emit("build", "info", line)
 	})
+	cancelBuild()  // stop the watchdog goroutine now regardless of outcome
+	<-watchdogDone // and wait for it so we know no further cancels will fire
+
 	if err != nil {
+		// Distinguish "buildx killed because superseded / parent shutdown"
+		// from a genuine build failure. If the deployment is no longer in
+		// 'building', the watchdog (or an operator) killed it — that's the
+		// correct outcome, not something we should stamp as failed on top of.
+		var status string
+		_ = s.Pool.QueryRow(context.Background(),
+			`SELECT status FROM deployments WHERE id = $1`, dep.ID).Scan(&status)
+		if status != string(model.DeployBuilding) {
+			emit("build", "info", "build aborted: deployment status changed to "+status)
+			return nil
+		}
 		fail(ctx, s, dep.ID, "build", err.Error())
 		return err
 	}
@@ -139,9 +190,16 @@ func run(ctx context.Context, s *store.Store, obj *storage.Client, bld *builder.
 		fail(ctx, s, dep.ID, "set_image", err.Error())
 		return err
 	}
-	// Hand off to control-plane reconciler.
-	if err := s.MarkDeploymentStatus(ctx, dep.ID, model.DeployPushing, ""); err != nil {
+	// Conditional handoff — if the deployment got superseded between buildx
+	// exiting and now, don't clobber the terminal state. TryAdvance returns
+	// (false, nil) in that race and we bow out silently.
+	advanced, err := s.TryAdvanceDeploymentStatus(ctx, dep.ID, model.DeployBuilding, model.DeployPushing)
+	if err != nil {
 		return err
+	}
+	if !advanced {
+		emit("build", "info", "build finished but deployment already moved on; skipping handoff")
+		return nil
 	}
 	emit("build", "info", "handed off to control-plane for deploy")
 	return nil

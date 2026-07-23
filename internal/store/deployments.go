@@ -125,6 +125,25 @@ func (s *Store) ClaimNextQueued(ctx context.Context) (*model.Deployment, error) 
 	return d, err
 }
 
+// TryAdvanceDeploymentStatus does a CAS-style UPDATE: only moves the row from
+// `from` to `to`. Returns (true, nil) when the row was in `from` and now sits
+// at `to`; (false, nil) when it was already at a different status (typically
+// because it got superseded or failed under us). Used by build-service to
+// avoid clobbering a terminal state — e.g. build finished after the
+// deployment was already flipped to 'superseded'.
+func (s *Store) TryAdvanceDeploymentStatus(ctx context.Context, id uuid.UUID, from, to model.DeploymentStatus) (bool, error) {
+	tag, err := s.Pool.Exec(ctx,
+		`UPDATE deployments
+		    SET status = $3,
+		        build_done_at = CASE WHEN $3 IN ('pushing','deploying','running','failed') AND build_done_at IS NULL THEN now() ELSE build_done_at END
+		  WHERE id = $1 AND status = $2`,
+		id, from, to)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
 func (s *Store) MarkDeploymentStatus(ctx context.Context, id uuid.UUID, status model.DeploymentStatus, failureReason string) error {
 	const q = `
 		UPDATE deployments
