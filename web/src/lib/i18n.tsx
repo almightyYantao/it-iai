@@ -194,9 +194,9 @@ const zh: Dict = {
   "access.visibility.restricted": "仅限协作者",
   "access.visibility.restricted.hint":
     "SSO 之后还要在协作者名单里 —— 没加进来的同事即便登录了也会被拒。",
-  "access.visibility.public": "不需要登录",
-  "access.visibility.public.hint":
-    "完全不走 SSO —— 任何能解析到这个域名的人都能直接访问，请只用于面向公网的页面或需要免登录的 API。",
+  "access.visibility.public.legacy": "免登录（已停用）",
+  "access.visibility.public.legacy.hint":
+    "此项目仍是历史的免登录模式，且该模式已停用、不能再选。请改为上面两种之一；若确实有机器调用方需要免 SSO，用项目 API Token 配合路径规则单独放行，而不是开放整个应用。",
   "access.count.none.preset": "预设当前未配 IP",
   "access.count.none": "未设置任何 IP",
   "access.count.n": "{{n}} 条规则",
@@ -693,9 +693,9 @@ const en: Dict = {
   "access.visibility.restricted": "Collaborators only",
   "access.visibility.restricted.hint":
     "Sign-in plus an allow-list — colleagues not on the collaborator list are blocked even after SSO.",
-  "access.visibility.public": "No login required",
-  "access.visibility.public.hint":
-    "Skips SSO entirely. Anyone who can resolve this hostname can reach the app — use only for public pages or API endpoints that must accept anonymous traffic.",
+  "access.visibility.public.legacy": "No login required (withdrawn)",
+  "access.visibility.public.legacy.hint":
+    "This project is still on the legacy no-login mode, which has been withdrawn and can no longer be selected. Switch to one of the options above; if a machine caller genuinely needs to skip SSO, exempt it with a project API token plus a path rule rather than opening the whole app.",
   "access.count.none.preset": "preset has no IPs configured",
   "access.count.none": "No IPs configured",
   "access.count.n": "{{n}} rule(s)",

@@ -385,14 +385,18 @@ func (s *Server) handlePatchProjectTLS(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /v1/projects/:slug/visibility
 //
-// Body: { "visibility": "org" | "restricted" | "public" }
+// Body: { "visibility": "org" | "restricted" }
 //
 // Switches the SSO gating mode for the project:
 //
 //   - org        traffic must carry a valid Longbridge OIDC cookie (any
 //                Keycloak-issued user passes).
 //   - restricted same as org plus an app-level collaborator check.
-//   - public     no auth at all — anyone on the network reaches the app.
+//
+// "public" (no auth gate at all) is no longer selectable — the platform is
+// internal-access-only. To let a specific machine caller through without SSO,
+// use a per-project API token plus a path rule instead of opening the whole
+// app; see handleCreatePathRule.
 //
 // Owner or admin only. Triggers an immediate ingress re-sync so the
 // ForwardAuth middleware is added or removed without waiting for a redeploy.
@@ -413,9 +417,16 @@ func (s *Server) handlePatchProjectVisibility(w http.ResponseWriter, r *http.Req
 	}
 	v := model.Visibility(body.Visibility)
 	switch v {
-	case model.VisibilityOrg, model.VisibilityRestricted, model.VisibilityPublic:
+	case model.VisibilityOrg, model.VisibilityRestricted:
+	case model.VisibilityPublic:
+		// Deliberately a distinct message: callers that used to send "public"
+		// should know it was withdrawn on purpose, not that they typo'd.
+		writeError(w, http.StatusBadRequest, "visibility_public_withdrawn",
+			"public visibility is no longer available — the platform is internal-access-only. "+
+				"Use a project API token + path rule to exempt a specific machine caller.")
+		return
 	default:
-		writeError(w, http.StatusBadRequest, "bad_visibility", "visibility must be one of: org, restricted, public")
+		writeError(w, http.StatusBadRequest, "bad_visibility", "visibility must be one of: org, restricted")
 		return
 	}
 

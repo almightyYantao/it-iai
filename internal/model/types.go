@@ -12,7 +12,13 @@ type Visibility string
 const (
 	VisibilityOrg        Visibility = "org"
 	VisibilityRestricted Visibility = "restricted"
-	VisibilityPublic     Visibility = "public"
+
+	// VisibilityPublic means no auth gate at all. Withdrawn 2026-07 — the
+	// platform is internal-access-only, and the API rejects it (see
+	// handlePatchProjectVisibility). Kept so rows written before then still
+	// deserialise and so syncIngressForProject keeps treating them as ungated
+	// rather than silently changing their behaviour; not selectable anywhere.
+	VisibilityPublic Visibility = "public"
 )
 
 type ProjectStatus string

@@ -101,11 +101,15 @@ export function ProjectAccessPanel({
     onError: (err) => setOpError(err instanceof ApiError ? err.message : String(err)),
   });
 
-  // Visibility is a single-dropdown setting with a much higher blast radius
-  // than a CIDR list (switching to "public" removes SSO entirely). Save
-  // immediately on change so the change is obvious, but show inline feedback.
+  // Visibility is a single-dropdown setting with a higher blast radius than a
+  // CIDR list, so save immediately on change and show inline feedback.
+  //
+  // "public" was withdrawn — the platform is internal-access-only. It can still
+  // arrive from the server on pre-existing rows, which is why the type below
+  // stays wide enough to render one (see the legacy <option>), but it can no
+  // longer be selected.
   const saveVisibility = useMutation({
-    mutationFn: (next: "org" | "restricted" | "public") =>
+    mutationFn: (next: "org" | "restricted") =>
       api.setProjectVisibility(slug, next),
     onSuccess: () => {
       setOpError(null);
@@ -162,17 +166,25 @@ export function ProjectAccessPanel({
           <div>
             <select
               value={visibility}
-              onChange={(e) => saveVisibility.mutate(e.target.value as "org" | "restricted" | "public")}
+              onChange={(e) => saveVisibility.mutate(e.target.value as "org" | "restricted")}
               disabled={!canEdit || saveVisibility.isPending}
               className="w-full rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] text-ink-strong focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand disabled:opacity-60"
             >
               <option value="org">{t("access.visibility.org")}</option>
               <option value="restricted">{t("access.visibility.restricted")}</option>
-              <option value="public">{t("access.visibility.public")}</option>
+              {/* Withdrawn option. Rendered only when a pre-existing row still
+                  carries it, so the dropdown reflects reality instead of
+                  silently displaying the wrong mode; disabled so it is a
+                  one-way exit. */}
+              {visibility === "public" && (
+                <option value="public" disabled>
+                  {t("access.visibility.public.legacy")}
+                </option>
+              )}
             </select>
             <p className="mt-1.5 text-[11.5px] text-ink-faint leading-relaxed">
               {visibility === "public"
-                ? t("access.visibility.public.hint")
+                ? t("access.visibility.public.legacy.hint")
                 : visibility === "restricted"
                   ? t("access.visibility.restricted.hint")
                   : t("access.visibility.org.hint")}

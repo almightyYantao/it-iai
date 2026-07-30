@@ -166,13 +166,14 @@ export const api = {
       `/v1/projects/${encodeURIComponent(slug)}/path-rules/${encodeURIComponent(id)}`,
     ),
 
-  // setProjectVisibility switches between the three SSO-gating modes:
+  // setProjectVisibility switches between the two SSO-gating modes:
   //   - "org"        any Longbridge SSO user can reach the URL.
   //   - "restricted" Longbridge SSO + project collaborator allow-list.
-  //   - "public"     no SSO at all (open to anyone on the network).
+  // "public" (no SSO at all) was withdrawn — the platform is internal-access-
+  // only and the server now rejects it with visibility_public_withdrawn.
   // Server re-syncs the ingress immediately so the change is live within
   // ~1s on the cluster.
-  setProjectVisibility: (slug: string, visibility: "org" | "restricted" | "public") =>
+  setProjectVisibility: (slug: string, visibility: "org" | "restricted") =>
     request<{ ok: boolean; visibility: string }>(
       "PATCH",
       `/v1/projects/${encodeURIComponent(slug)}/visibility`,
