@@ -3,11 +3,14 @@ package k8sdriver
 import (
 	"context"
 	"fmt"
+	"net"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -47,16 +50,20 @@ var ingressRouteGVR = schema.GroupVersionResource{
 const apiTokenVerifyMiddlewareRef = "oauth2-proxy-iai-api-token-verify@kubernetescrd"
 
 type Deployer struct {
-	cs            *kubernetes.Clientset
-	dyn           dynamic.Interface // for Traefik Middleware CRs we don't import directly
-	baseDomain    string
-	ingressClass  string
+	cs           *kubernetes.Clientset
+	dyn          dynamic.Interface // for Traefik Middleware CRs we don't import directly
+	baseDomain   string
+	ingressClass string
 	// Name of the cert-manager ClusterIssuer to attach to Ingresses that opt
 	// into TLS. Empty disables the annotation entirely — handy on dev clusters
 	// where cert-manager isn't installed yet.
 	tlsClusterIssuer string
 	// Image hostname rewritten when control plane refers to a different host than what k3d uses.
 	registryHostFromCluster string
+	// host:port pairs on the platform host that user pods legitimately need
+	// (their own Postgres / Redis / S3). Everything else on those hosts is
+	// denied by the per-project egress policy — see ensureEgressPolicy.
+	platformServiceEndpoints []string
 }
 
 type DeployerOpts struct {
@@ -65,6 +72,10 @@ type DeployerOpts struct {
 	IngressClass            string
 	TLSClusterIssuer        string
 	RegistryHostFromCluster string // e.g. "host.k3d.internal:5001"
+	// PlatformServiceEndpoints lists the "host:port" values pods are handed in
+	// DATABASE_URL / REDIS_URL / S3_ENDPOINT. Used to build the allow-list of
+	// the per-project egress NetworkPolicy; empty disables the policy.
+	PlatformServiceEndpoints []string
 }
 
 func New(opts DeployerOpts) (*Deployer, error) {
@@ -81,22 +92,23 @@ func New(opts DeployerOpts) (*Deployer, error) {
 		return nil, err
 	}
 	return &Deployer{
-		cs:                      cs,
-		dyn:                     dyn,
-		baseDomain:              opts.BaseDomain,
-		ingressClass:            opts.IngressClass,
-		tlsClusterIssuer:        opts.TLSClusterIssuer,
-		registryHostFromCluster: opts.RegistryHostFromCluster,
+		cs:                       cs,
+		dyn:                      dyn,
+		baseDomain:               opts.BaseDomain,
+		ingressClass:             opts.IngressClass,
+		tlsClusterIssuer:         opts.TLSClusterIssuer,
+		registryHostFromCluster:  opts.RegistryHostFromCluster,
+		platformServiceEndpoints: opts.PlatformServiceEndpoints,
 	}, nil
 }
 
 type ApplyInput struct {
-	Slug     string
-	Image    string            // <registry>/<slug>:<dep_id> as known to Build Service
-	Port     int
-	Env      map[string]string // user env + injected
-	CPU      string
-	Memory   string
+	Slug   string
+	Image  string // <registry>/<slug>:<dep_id> as known to Build Service
+	Port   int
+	Env    map[string]string // user env + injected
+	CPU    string
+	Memory string
 	// SQLite enables the Litestream pattern: emptyDir /data shared with a
 	// sidecar that continuously replicates /data/app.db to the project's
 	// S3 bucket. An init container restores from S3 on pod start. Requires
@@ -108,17 +120,18 @@ type ApplyInput struct {
 // Litestream defaults — kept as package-level constants so the init / sidecar
 // container helpers and the env injection in the reconciler stay aligned.
 const (
-	litestreamImage    = "litestream/litestream:0.3.13"
-	sqliteVolumeName   = "sqlite-data"
-	sqliteMountPath    = "/data"
-	sqliteDefaultDB    = "/data/app.db"
-	sqliteS3ObjectKey  = "app.db" // path under the project's S3 bucket
+	litestreamImage   = "litestream/litestream:0.3.13"
+	sqliteVolumeName  = "sqlite-data"
+	sqliteMountPath   = "/data"
+	sqliteDefaultDB   = "/data/app.db"
+	sqliteS3ObjectKey = "app.db" // path under the project's S3 bucket
 )
 
 // litestreamScript builds a small shell snippet that:
-//   * generates a one-off config at /tmp/lc.yml from the S3_* env vars
+//   - generates a one-off config at /tmp/lc.yml from the S3_* env vars
 //     already present in the pod (injected from project_env)
-//   * exec's the supplied litestream subcommand
+//   - exec's the supplied litestream subcommand
+//
 // Inline config keeps us from having to manage a ConfigMap per project.
 func litestreamScript(subcommand string) string {
 	return `set -eu
@@ -163,10 +176,123 @@ func (d *Deployer) EnsureNamespace(ctx context.Context, slug string) error {
 	return err
 }
 
+const egressPolicyName = "iai-egress"
+
+// ensureEgressPolicy pins down what a user pod may reach on the platform host.
+//
+// The problem it solves: everything the platform runs on that host — the image
+// registry (5001), the control-plane database (5432), the control-plane API
+// (8080) — is published on 0.0.0.0, so any workload could talk to it. A host
+// firewall can't fix that: pod traffic to a node address is masqueraded to that
+// node's IP before it arrives, so the registry cannot tell a pod from
+// containerd. Filtering has to happen at the pod's egress instead.
+//
+// NetworkPolicy is allow-list only, so "deny a few ports" is expressed as
+// "allow the internet except the platform hosts, then add those hosts back on
+// exactly the ports pods are handed in DATABASE_URL / REDIS_URL / S3_ENDPOINT".
+// Ports we never grant stay unreachable. Endpoints configured as hostnames
+// rather than IPs are skipped — ipBlock can't express DNS names, and leaving
+// them to the catch-all rule errs toward availability rather than breaking a
+// service we failed to parse.
+func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string) error {
+	if len(d.platformServiceEndpoints) == 0 {
+		return nil
+	}
+	// host → ports it may be reached on. 80/443 come along for free: projects
+	// call each other (and the platform's own API) through Traefik by hostname.
+	allowed := map[string]map[int32]struct{}{}
+	for _, ep := range d.platformServiceEndpoints {
+		host, portStr, err := net.SplitHostPort(strings.TrimSpace(ep))
+		if err != nil || net.ParseIP(host) == nil {
+			continue
+		}
+		port, err := strconv.Atoi(portStr)
+		if err != nil || port < 1 || port > 65535 {
+			continue
+		}
+		if allowed[host] == nil {
+			allowed[host] = map[int32]struct{}{80: {}, 443: {}}
+		}
+		allowed[host][int32(port)] = struct{}{}
+	}
+	// The registry is published on the platform's public address too, so it has
+	// to join the deny side even when no data service is configured there —
+	// otherwise pods just reach 5001 by the other IP. It gets 80/443 only.
+	if host, _, err := net.SplitHostPort(strings.TrimSpace(d.registryHostFromCluster)); err == nil {
+		if ip := net.ParseIP(host); ip != nil && !ip.IsLoopback() && allowed[host] == nil {
+			allowed[host] = map[int32]struct{}{80: {}, 443: {}}
+		}
+	}
+	if len(allowed) == 0 {
+		return nil
+	}
+
+	hosts := make([]string, 0, len(allowed))
+	for h := range allowed {
+		hosts = append(hosts, h)
+	}
+	sort.Strings(hosts)
+
+	except := make([]string, 0, len(hosts))
+	for _, h := range hosts {
+		except = append(except, h+"/32")
+	}
+	rules := []netv1.NetworkPolicyEgressRule{{
+		To: []netv1.NetworkPolicyPeer{{
+			IPBlock: &netv1.IPBlock{CIDR: "0.0.0.0/0", Except: except},
+		}},
+	}}
+	tcp := corev1.ProtocolTCP
+	for _, h := range hosts {
+		ports := make([]int32, 0, len(allowed[h]))
+		for p := range allowed[h] {
+			ports = append(ports, p)
+		}
+		sort.Slice(ports, func(i, j int) bool { return ports[i] < ports[j] })
+		peerPorts := make([]netv1.NetworkPolicyPort, 0, len(ports))
+		for _, p := range ports {
+			pp := intstr.FromInt(int(p))
+			peerPorts = append(peerPorts, netv1.NetworkPolicyPort{Protocol: &tcp, Port: &pp})
+		}
+		rules = append(rules, netv1.NetworkPolicyEgressRule{
+			To:    []netv1.NetworkPolicyPeer{{IPBlock: &netv1.IPBlock{CIDR: h + "/32"}}},
+			Ports: peerPorts,
+		})
+	}
+
+	ns := d.namespaceFor(slug)
+	want := &netv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: egressPolicyName, Namespace: ns, Labels: appLabels(slug)},
+		Spec: netv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeEgress},
+			Egress:      rules,
+		},
+	}
+	api := d.cs.NetworkingV1().NetworkPolicies(ns)
+	cur, err := api.Get(ctx, egressPolicyName, metav1.GetOptions{})
+	if apierr.IsNotFound(err) {
+		_, err = api.Create(ctx, want, metav1.CreateOptions{})
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	want.ResourceVersion = cur.ResourceVersion
+	_, err = api.Update(ctx, want, metav1.UpdateOptions{})
+	return err
+}
+
 // Apply creates or updates the Deployment, Service, Ingress, and Secret for a project.
 func (d *Deployer) Apply(ctx context.Context, in ApplyInput) error {
 	if err := d.EnsureNamespace(ctx, in.Slug); err != nil {
 		return err
+	}
+	// Reconciled on every deploy rather than only at namespace creation, so
+	// projects that predate the policy (or had it deleted by hand) get it back
+	// without an operator remembering to reapply it.
+	if err := d.ensureEgressPolicy(ctx, in.Slug); err != nil {
+		return fmt.Errorf("egress policy: %w", err)
 	}
 	if err := d.applySecret(ctx, in); err != nil {
 		return err
@@ -820,9 +946,9 @@ func (d *Deployer) IsDeploymentReady(ctx context.Context, slug string) (bool, er
 //   - summary:        short human-readable state line, suitable for an event log.
 //   - ready:          true once at least one container has passed its readiness probe.
 //   - terminalReason: non-empty when the pod has reached a state that won't recover
-//                     without user intervention (ImagePullBackOff, CrashLoopBackOff,
-//                     InvalidImageName, ...). The reconciler should fail the
-//                     deployment with this reason instead of polling forever.
+//     without user intervention (ImagePullBackOff, CrashLoopBackOff,
+//     InvalidImageName, ...). The reconciler should fail the
+//     deployment with this reason instead of polling forever.
 func (d *Deployer) PodSummary(ctx context.Context, slug string) (summary string, ready bool, terminalReason string, err error) {
 	ns := d.namespaceFor(slug)
 	pods, err := d.cs.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: "app=" + slug})
@@ -911,10 +1037,10 @@ func (d *Deployer) PodSummary(ctx context.Context, slug string) (summary string,
 // Returned by GET /v1/projects/{slug} so the admin UI can show node assignment
 // without the operator having to SSH and run kubectl.
 type PodPlacement struct {
-	Node    string `json:"node"`            // node the pod is scheduled on
-	Pod     string `json:"pod"`             // pod name (useful for kubectl logs)
-	Phase   string `json:"phase"`           // "Running" / "Pending" / ...
-	Ready   bool   `json:"ready"`           // first container has passed readiness probe
+	Node    string `json:"node"`  // node the pod is scheduled on
+	Pod     string `json:"pod"`   // pod name (useful for kubectl logs)
+	Phase   string `json:"phase"` // "Running" / "Pending" / ...
+	Ready   bool   `json:"ready"` // first container has passed readiness probe
 	PodIP   string `json:"pod_ip,omitempty"`
 	HostIP  string `json:"host_ip,omitempty"`
 	Started string `json:"started,omitempty"` // RFC3339; empty if pod hasn't started yet
