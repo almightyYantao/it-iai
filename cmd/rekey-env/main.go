@@ -1,10 +1,21 @@
-// rekey-env re-encrypts every project_env row from the pre-AAD format under an
-// old KEK to the AAD-bound format under a new KEK.
+// rekey-env re-encrypts every project_env row under a new KEK, binding each
+// value to its (project_id, key) via AAD.
 //
-// One-shot migration for the 2026-07 incident: ciphertext used to be sealed with
-// AAD=nil, so a row could be copied between projects and the platform would
-// happily decrypt it on the next deploy. EnvAAD binds each value to its
-// (project_id, key); this tool converts the existing corpus.
+// It covers two jobs:
+//
+//   - KEK rotation. Rows already AAD-bound are read under the old key and
+//     re-sealed under the new one. This is the routine case — run it whenever
+//     CP_KEK_BASE64 has to change (suspected key exposure, scheduled rotation).
+//
+//   - The 2026-07 AAD migration. Ciphertext used to be sealed with AAD=nil, so a
+//     row could be copied between projects and the platform would happily
+//     decrypt it on the next deploy. EnvAAD binds each value to its
+//     (project_id, key); passing --old-kek == --new-kek converts that corpus
+//     without changing keys.
+//
+// Both source formats are accepted in the same run, so a half-migrated corpus
+// converges. Restart the control plane with the new CP_KEK_BASE64 afterwards —
+// until then it cannot read the rows this tool just rewrote.
 //
 // Usage:
 //
@@ -83,14 +94,22 @@ func main() {
 	for _, r := range rows {
 		aad := auth.EnvAAD(r.ProjectID.String(), r.Key)
 
-		// Already migrated? Then leave it alone — keeps the run idempotent.
+		// Already sealed under the target key? Then leave it alone — keeps the
+		// run idempotent.
 		if _, err := newKEK.Decrypt(r.CT, aad); err == nil {
 			skipped++
 			continue
 		}
 
-		// Legacy format: old KEK, no AAD.
-		pt, err := oldKEK.Decrypt(r.CT, nil)
+		// Two source formats are accepted, tried in order:
+		//   1. old KEK + AAD — a plain key rotation of an already-migrated row.
+		//      This is the normal case once the 2026-07 AAD migration has run;
+		//      without it the tool could only ever be used once.
+		//   2. old KEK, no AAD — the pre-AAD legacy format.
+		pt, err := oldKEK.Decrypt(r.CT, aad)
+		if err != nil {
+			pt, err = oldKEK.Decrypt(r.CT, nil)
+		}
 		if err != nil {
 			failed = append(failed, r)
 			continue
