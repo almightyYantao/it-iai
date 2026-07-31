@@ -121,11 +121,20 @@ type pendingDeploy struct {
 }
 
 func (r *Reconciler) tick(ctx context.Context) {
+	// The join on projects is load-bearing, not cosmetic: without it a
+	// deployment left in 'pushing'/'deploying' for a soft-deleted project gets
+	// picked up and re-applied, which recreates the namespace and (via the
+	// readiness path below) writes status='running' back onto a tombstoned row.
+	// That leaves a live workload the platform no longer manages — it is
+	// invisible to every list query, to reconcileProjectHealth, and to the
+	// startup ingress sweep, all of which filter deleted_at IS NULL.
 	const q = `
-		SELECT id, project_id, status, COALESCE(image_tag,''), manifest
-		FROM deployments
-		WHERE status IN ('pushing','deploying')
-		ORDER BY queued_at ASC
+		SELECT d.id, d.project_id, d.status, COALESCE(d.image_tag,''), d.manifest
+		FROM deployments d
+		JOIN projects p ON p.id = d.project_id
+		WHERE d.status IN ('pushing','deploying')
+		  AND p.deleted_at IS NULL
+		ORDER BY d.queued_at ASC
 		LIMIT 8
 	`
 	rows, err := r.srv.store.Pool.Query(ctx, q)
@@ -360,8 +369,12 @@ func (r *Reconciler) fail(ctx context.Context, depID uuid.UUID, code, msg string
 	r.srv.bus.Publish(depID)
 }
 
+// slugFor resolves a project id to its slug. Filters deleted_at like every
+// other project read: a caller that gets ErrNoRows here fails its deployment
+// rather than deploying into a namespace for a project that no longer exists.
 func (r *Reconciler) slugFor(ctx context.Context, projectID uuid.UUID) (string, error) {
 	var slug string
-	err := r.srv.store.Pool.QueryRow(ctx, `SELECT slug FROM projects WHERE id = $1`, projectID).Scan(&slug)
+	err := r.srv.store.Pool.QueryRow(ctx,
+		`SELECT slug FROM projects WHERE id = $1 AND deleted_at IS NULL`, projectID).Scan(&slug)
 	return slug, err
 }
