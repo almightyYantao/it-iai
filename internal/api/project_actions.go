@@ -153,19 +153,43 @@ func (s *Server) syncIngressForProject(ctx context.Context, p *model.Project) er
 	})
 }
 
+// accessPolicySelfService gates whether a project owner may change their own
+// inbound access policy (SSO scope + IP allow-list).
+//
+// Turned off: the access-control panel was withdrawn from the project page, and
+// hiding UI alone would just move the same capability behind a raw API call.
+// Inbound policy is now owned centrally — admins maintain the named CIDR presets
+// (PUT /v1/admin/cidr-presets/{name}), which re-syncs every project bound to
+// them, and new projects default to the `internal` preset.
+//
+// Flip to true to restore self-service; the handler bodies are untouched.
+const accessPolicySelfService = false
+
+func accessPolicyFrozen(w http.ResponseWriter, what string) {
+	writeError(w, http.StatusForbidden, "access_policy_frozen",
+		"per-project "+what+" can no longer be changed through the API — "+
+			"inbound access policy is maintained by platform admins via the global CIDR presets")
+}
+
 // PATCH /v1/projects/:slug/access
 //
 // Body: one of
-//   { "preset": "internal" }                      // switch to preset mode
-//   { "preset": null, "allow_cidrs": [...] }      // switch to custom mode
+//
+//	{ "preset": "internal" }                      // switch to preset mode
+//	{ "preset": null, "allow_cidrs": [...] }      // switch to custom mode
 //
 // Sending only `allow_cidrs` (legacy clients) is also accepted — preset is
 // cleared and the project goes into custom mode automatically. Empty
 // `allow_cidrs` in custom mode means "no IP restriction".
 //
-// Only the project owner or an admin may change this — collaborators
-// explicitly cannot, because access policy is not a development concern.
+// Frozen — see accessPolicySelfService. When self-service was on, only the
+// project owner or an admin could change this; collaborators explicitly could
+// not, because access policy is not a development concern.
 func (s *Server) handlePatchProjectAccess(w http.ResponseWriter, r *http.Request) {
+	if !accessPolicySelfService {
+		accessPolicyFrozen(w, "IP allow-list / access preset")
+		return
+	}
 	p := projectFrom(r.Context())
 	actor, _ := ActorFrom(r.Context())
 	if !s.canManageProject(actor, p) {
@@ -390,7 +414,7 @@ func (s *Server) handlePatchProjectTLS(w http.ResponseWriter, r *http.Request) {
 // Switches the SSO gating mode for the project:
 //
 //   - org        traffic must carry a valid Longbridge OIDC cookie (any
-//                Keycloak-issued user passes).
+//     Keycloak-issued user passes).
 //   - restricted same as org plus an app-level collaborator check.
 //
 // "public" (no auth gate at all) is no longer selectable — the platform is
@@ -401,6 +425,12 @@ func (s *Server) handlePatchProjectTLS(w http.ResponseWriter, r *http.Request) {
 // Owner or admin only. Triggers an immediate ingress re-sync so the
 // ForwardAuth middleware is added or removed without waiting for a redeploy.
 func (s *Server) handlePatchProjectVisibility(w http.ResponseWriter, r *http.Request) {
+	// Visibility (the SSO scope) was rendered in the same withdrawn panel, so it
+	// is frozen alongside the allow-list — see accessPolicySelfService.
+	if !accessPolicySelfService {
+		accessPolicyFrozen(w, "visibility")
+		return
+	}
 	p := projectFrom(r.Context())
 	actor, _ := ActorFrom(r.Context())
 	if !s.canManageProject(actor, p) {

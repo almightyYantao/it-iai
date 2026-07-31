@@ -12,7 +12,9 @@ import { Pagination, type PaginationState } from "../components/Pagination";
 import { CollaboratorsPanel } from "../components/CollaboratorsPanel";
 import { DomainsPanel } from "../components/DomainsPanel";
 import { EnvPanel } from "../components/EnvPanel";
-import { ProjectAccessPanel } from "../components/ProjectAccessPanel";
+// ProjectAccessPanel is intentionally not mounted — see the commented-out
+// render below. noUnusedLocals would fail the build on a dangling import.
+// import { ProjectAccessPanel } from "../components/ProjectAccessPanel";
 import { ProjectNamePanel } from "../components/ProjectNamePanel";
 import { ProjectTLSPanel } from "../components/ProjectTLSPanel";
 import { ProjectAPIAccessPanel } from "../components/ProjectAPIAccessPanel";
@@ -204,6 +206,16 @@ export function ProjectDetail() {
         <EnvPanel slug={slug} canEdit={canManage} />
       </div>
 
+      {/* Access control panel — withdrawn from the project page. Inbound policy
+          (SSO scope + IP allow-list) is no longer self-service: it is owned by
+          platform admins through 设置 → 访问预设, and PATCH /access and
+          PATCH /visibility both refuse changes server-side. Hiding the panel
+          alone would only move the same capability behind a raw API call, which
+          is why the backend is gated too.
+
+          Kept commented rather than deleted so re-enabling is a two-line
+          revert if the policy changes.
+
       <div className="mt-8">
         <ProjectAccessPanel
           slug={slug}
@@ -211,9 +223,6 @@ export function ProjectDetail() {
           initialCIDRs={p.allow_cidrs ?? []}
           visibility={p.visibility}
           canEdit={canManage}
-          // Only admins (or platform tokens) can edit the global preset
-          // list — mirror the backend permission so non-admins don't get a
-          // dead-link "Manage presets →".
           canManagePresets={
             who.data?.kind === "user"
               ? Boolean(who.data.admin)
@@ -221,6 +230,7 @@ export function ProjectDetail() {
           }
         />
       </div>
+      */}
 
       <div className="mt-8">
         <ProjectTLSPanel
