@@ -112,6 +112,7 @@ func runServer() {
 		TLSClusterIssuer:         cfg.TLSClusterIssuer,
 		RegistryHostFromCluster:  registryHostFromCluster,
 		PlatformServiceEndpoints: platformEndpoints,
+		DNSClusterIP:             cfg.DNSClusterIP,
 	})
 	if err != nil {
 		log.Printf("k8s driver disabled: %v (control plane will run but Apply will fail)", err)

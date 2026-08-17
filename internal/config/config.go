@@ -5,10 +5,10 @@ import (
 )
 
 type ControlPlane struct {
-	ListenAddr     string `env:"CP_LISTEN_ADDR" envDefault:":8080"`
-	DatabaseURL    string `env:"CP_DATABASE_URL,required"`
-	PublicBaseURL  string `env:"CP_PUBLIC_BASE_URL" envDefault:"http://localhost:8080"`
-	AppBaseDomain  string `env:"CP_APP_BASE_DOMAIN" envDefault:"lab.localhost"`
+	ListenAddr    string `env:"CP_LISTEN_ADDR" envDefault:":8080"`
+	DatabaseURL   string `env:"CP_DATABASE_URL,required"`
+	PublicBaseURL string `env:"CP_PUBLIC_BASE_URL" envDefault:"http://localhost:8080"`
+	AppBaseDomain string `env:"CP_APP_BASE_DOMAIN" envDefault:"lab.localhost"`
 
 	S3Endpoint     string `env:"CP_S3_ENDPOINT,required"`
 	S3Region       string `env:"CP_S3_REGION" envDefault:"us-east-1"`
@@ -22,13 +22,13 @@ type ControlPlane struct {
 	S3PublicEndpoint string `env:"CP_S3_PUBLIC_ENDPOINT"`
 	S3PublicUseSSL   bool   `env:"CP_S3_PUBLIC_USE_SSL" envDefault:"false"`
 
-	RegistryHost        string `env:"CP_REGISTRY_HOST,required"`         // registry hostname Build Service pushes to
-	RegistryHostFromK3D string `env:"CP_REGISTRY_HOST_FROM_K3D"`          // hostname K3s nodes use to pull (may differ from build-side)
+	RegistryHost        string `env:"CP_REGISTRY_HOST,required"` // registry hostname Build Service pushes to
+	RegistryHostFromK3D string `env:"CP_REGISTRY_HOST_FROM_K3D"` // hostname K3s nodes use to pull (may differ from build-side)
 
 	KEKBase64 string `env:"CP_KEK_BASE64,required"`
 
-	KCIssuer   string `env:"CP_KC_ISSUER"`
-	KCJWKSURL  string `env:"CP_KC_JWKS_URL"`
+	KCIssuer  string `env:"CP_KC_ISSUER"`
+	KCJWKSURL string `env:"CP_KC_JWKS_URL"`
 	// Empty by default — Keycloak's `aud` claim usually doesn't carry the
 	// resource server name without a custom mapper. Issuer + signature is
 	// the real check. Set this only after you've added a KC "Audience"
@@ -37,21 +37,26 @@ type ControlPlane struct {
 
 	// OIDC Authorization Code flow (browser → Keycloak → /v1/auth/oidc-callback).
 	// All four required for the Web UI's "Sign in with Keycloak" button to work.
-	KCAuthorizationURL string `env:"CP_KC_AUTHORIZATION_URL"`  // e.g. https://kc/realms/lb/protocol/openid-connect/auth
-	KCTokenURL         string `env:"CP_KC_TOKEN_URL"`          // e.g. https://kc/realms/lb/protocol/openid-connect/token
-	KCClientID         string `env:"CP_KC_CLIENT_ID"`          // confidential client for the proxy/web
+	KCAuthorizationURL string `env:"CP_KC_AUTHORIZATION_URL"` // e.g. https://kc/realms/lb/protocol/openid-connect/auth
+	KCTokenURL         string `env:"CP_KC_TOKEN_URL"`         // e.g. https://kc/realms/lb/protocol/openid-connect/token
+	KCClientID         string `env:"CP_KC_CLIENT_ID"`         // confidential client for the proxy/web
 	KCClientSecret     string `env:"CP_KC_CLIENT_SECRET"`
-	KCRedirectURL      string `env:"CP_KC_REDIRECT_URL"`       // <public-base-url>/v1/auth/oidc-callback
+	KCRedirectURL      string `env:"CP_KC_REDIRECT_URL"` // <public-base-url>/v1/auth/oidc-callback
 
 	DevBootstrapToken string `env:"CP_DEV_BOOTSTRAP_TOKEN"`
 
-	Kubeconfig    string `env:"CP_KUBECONFIG" envDefault:"/root/.kube/config"`
-	IngressClass  string `env:"CP_K8S_INGRESS_CLASS" envDefault:"traefik"`
+	Kubeconfig   string `env:"CP_KUBECONFIG" envDefault:"/root/.kube/config"`
+	IngressClass string `env:"CP_K8S_INGRESS_CLASS" envDefault:"traefik"`
 
 	// Name of the cert-manager ClusterIssuer used when a project has TLS
 	// enabled. Defaults to the issuer that deploy/install-cert-manager.sh
 	// creates. Override to point at a staging issuer or an internal CA.
 	TLSClusterIssuer string `env:"CP_TLS_CLUSTER_ISSUER" envDefault:"letsencrypt-prod"`
+
+	// kube-dns's ClusterIP. The per-project egress policy denies the whole
+	// service network, so DNS has to be named explicitly to be reachable —
+	// see k8sdriver.ensureEgressPolicy. Default is k3s's (service CIDR .10).
+	DNSClusterIP string `env:"CP_DNS_CLUSTER_IP" envDefault:"10.43.0.10"`
 
 	// Hard cap on how many custom hostnames a single project can register
 	// (vanity subdomain + fully-custom FQDN combined). The default subdomain
@@ -93,10 +98,10 @@ type BuildService struct {
 	S3Region       string `env:"BS_S3_REGION" envDefault:"us-east-1"`
 	S3UseSSL       bool   `env:"BS_S3_USE_SSL" envDefault:"false"`
 
-	RegistryHost   string        `env:"BS_REGISTRY_HOST,required"`
-	WorkDir        string        `env:"BS_WORK_DIR" envDefault:"/var/lib/vibedeploy/build"`
-	PollInterval   string        `env:"BS_POLL_INTERVAL" envDefault:"2s"`
-	MaxConcurrent  int           `env:"BS_MAX_CONCURRENT" envDefault:"2"`
+	RegistryHost  string `env:"BS_REGISTRY_HOST,required"`
+	WorkDir       string `env:"BS_WORK_DIR" envDefault:"/var/lib/vibedeploy/build"`
+	PollInterval  string `env:"BS_POLL_INTERVAL" envDefault:"2s"`
+	MaxConcurrent int    `env:"BS_MAX_CONCURRENT" envDefault:"2"`
 }
 
 func LoadControlPlane() (ControlPlane, error) {

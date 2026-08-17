@@ -64,6 +64,9 @@ type Deployer struct {
 	// (their own Postgres / Redis / S3). Everything else on those hosts is
 	// denied by the per-project egress policy — see ensureEgressPolicy.
 	platformServiceEndpoints []string
+	// ClusterIP of kube-dns. Only used as a second way to name DNS in the egress
+	// policy; empty just drops that rule.
+	dnsClusterIP string
 }
 
 type DeployerOpts struct {
@@ -76,6 +79,9 @@ type DeployerOpts struct {
 	// DATABASE_URL / REDIS_URL / S3_ENDPOINT. Used to build the allow-list of
 	// the per-project egress NetworkPolicy; empty disables the policy.
 	PlatformServiceEndpoints []string
+	// DNSClusterIP is kube-dns's ClusterIP (k3s default 10.43.0.10). Named in the
+	// egress policy alongside the kube-dns pod selector; empty drops that rule.
+	DNSClusterIP string
 }
 
 func New(opts DeployerOpts) (*Deployer, error) {
@@ -99,6 +105,7 @@ func New(opts DeployerOpts) (*Deployer, error) {
 		tlsClusterIssuer:         opts.TLSClusterIssuer,
 		registryHostFromCluster:  opts.RegistryHostFromCluster,
 		platformServiceEndpoints: opts.PlatformServiceEndpoints,
+		dnsClusterIP:             opts.DNSClusterIP,
 	}, nil
 }
 
@@ -178,6 +185,12 @@ func (d *Deployer) EnsureNamespace(ctx context.Context, slug string) error {
 
 const egressPolicyName = "iai-egress"
 
+// isPrivateOrLinkLocal reports whether an address is already covered by the
+// blanket private-range carve-out, so it doesn't need its own /32 entry.
+func isPrivateOrLinkLocal(ip net.IP) bool {
+	return ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback()
+}
+
 // ensureEgressPolicy pins down what a user pod may reach on the platform host.
 //
 // The problem it solves: everything the platform runs on that host — the image
@@ -233,16 +246,78 @@ func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string) error {
 	}
 	sort.Strings(hosts)
 
-	except := make([]string, 0, len(hosts))
-	for _, h := range hosts {
-		except = append(except, h+"/32")
+	// Everything private is carved out of the catch-all and only handed back
+	// where a project demonstrably needs it:
+	//
+	//   10.42/16, 10.43/16  the pod and service networks. Cross-namespace pod
+	//                       traffic is how the 2026-07 payloads shipped harvested
+	//                       env to a collector running as another project, and how
+	//                       they scanned for reachable databases. Projects have no
+	//                       business dialling each other's pods — they talk over
+	//                       their hostnames through Traefik like any other client.
+	//   10/8, 172.16/12,    corporate internals. Reachable from a pod means one
+	//   192.168/16          compromised app is a foothold on the office network.
+	//   169.254/16          cloud instance metadata. Steals the node's IAM role in
+	//                       one HTTP GET; the attacker had a probe named for it.
+	//
+	// Public internet stays open here — it is closed separately once the egress
+	// proxy lands, because doing it in this rule would leave no way to allow the
+	// few destinations a project legitimately needs.
+	except := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"169.254.0.0/16",
 	}
+	for _, h := range hosts {
+		if ip := net.ParseIP(h); ip != nil && !isPrivateOrLinkLocal(ip) {
+			// Public addresses aren't covered by the ranges above, so they need
+			// their own carve-out (the platform's public IP publishes the
+			// registry too).
+			except = append(except, h+"/32")
+		}
+	}
+	sort.Strings(except)
 	rules := []netv1.NetworkPolicyEgressRule{{
 		To: []netv1.NetworkPolicyPeer{{
 			IPBlock: &netv1.IPBlock{CIDR: "0.0.0.0/0", Except: except},
 		}},
 	}}
 	tcp := corev1.ProtocolTCP
+	udp := corev1.ProtocolUDP
+
+	// DNS. Named both ways on purpose: the pod selector is what the CNI matches
+	// when it evaluates the pre-DNAT destination, the ClusterIP covers the case
+	// where it sees the service address instead. Getting this wrong doesn't
+	// degrade gracefully — every lookup in every project fails.
+	dnsPort := intstr.FromInt(53)
+	rules = append(rules,
+		netv1.NetworkPolicyEgressRule{
+			To: []netv1.NetworkPolicyPeer{{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"kubernetes.io/metadata.name": "kube-system"},
+				},
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"k8s-app": "kube-dns"},
+				},
+			}},
+			Ports: []netv1.NetworkPolicyPort{
+				{Protocol: &udp, Port: &dnsPort},
+				{Protocol: &tcp, Port: &dnsPort},
+			},
+		},
+		// A project's own pods — multi-replica apps and sidecars talking to each
+		// other. podSelector with no namespaceSelector means "this namespace".
+		netv1.NetworkPolicyEgressRule{
+			To: []netv1.NetworkPolicyPeer{{PodSelector: &metav1.LabelSelector{}}},
+		},
+	)
+	if ip := net.ParseIP(d.dnsClusterIP); ip != nil {
+		rules = append(rules, netv1.NetworkPolicyEgressRule{
+			To:    []netv1.NetworkPolicyPeer{{IPBlock: &netv1.IPBlock{CIDR: d.dnsClusterIP + "/32"}}},
+			Ports: []netv1.NetworkPolicyPort{{Protocol: &udp, Port: &dnsPort}, {Protocol: &tcp, Port: &dnsPort}},
+		})
+	}
 	for _, h := range hosts {
 		ports := make([]int32, 0, len(allowed[h]))
 		for p := range allowed[h] {
