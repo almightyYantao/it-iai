@@ -19,8 +19,8 @@ import (
 )
 
 type Server struct {
-	cfg      config.ControlPlane
-	store    *store.Store
+	cfg   config.ControlPlane
+	store *store.Store
 	// jwt is rebuilt on Settings-save, so reads must go through atomic.Pointer.
 	// Use s.JWT() rather than touching jwtPtr directly.
 	jwtPtr   atomic.Pointer[auth.JWTVerifier]
@@ -85,8 +85,8 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/v1/_internal/verify-api-token", s.handleInternalVerifyAPIToken)
 
 	// OIDC code-flow endpoints — unauthenticated by design.
-	r.Get("/v1/auth/oidc-status",   s.handleOIDCStatus)
-	r.Get("/v1/auth/oidc-login",    s.handleOIDCLogin)
+	r.Get("/v1/auth/oidc-status", s.handleOIDCStatus)
+	r.Get("/v1/auth/oidc-login", s.handleOIDCLogin)
 	r.Get("/v1/auth/oidc-callback", s.handleOIDCCallback)
 
 	r.Route("/v1", func(r chi.Router) {
@@ -102,6 +102,7 @@ func (s *Server) Routes() http.Handler {
 			r.Patch("/users/{id}", s.handleAdminPatchUser)
 			r.Get("/settings", s.handleAdminGetSettings)
 			r.Patch("/settings", s.handleAdminPatchSettings)
+			r.Get("/egress", s.handleAdminEgressOverview)
 			r.Get("/cidr-presets", s.handleListCIDRPresets)
 			r.Put("/cidr-presets/{name}", s.handlePutCIDRPreset)
 			r.Delete("/cidr-presets/{name}", s.handleDeleteCIDRPreset)
@@ -120,6 +121,10 @@ func (s *Server) Routes() http.Handler {
 				r.Patch("/visibility", s.handlePatchProjectVisibility)
 				r.Post("/api-token", s.handleRegenerateProjectAPIToken)
 				r.Delete("/api-token", s.handleRevokeProjectAPIToken)
+				// Egress allow-list: readable by anyone who can see the project,
+				// writable by platform admins only (enforced in the handler).
+				r.Get("/egress", s.handleListProjectEgress)
+				r.Put("/egress", s.handlePutProjectEgress)
 				r.Route("/path-rules", func(r chi.Router) {
 					r.Get("/", s.handleListPathRules)
 					r.Post("/", s.handleCreatePathRule)

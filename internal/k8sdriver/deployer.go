@@ -109,6 +109,14 @@ func New(opts DeployerOpts) (*Deployer, error) {
 	}, nil
 }
 
+// EgressAllow is one admin-approved destination for a project's pods, as far as
+// NetworkPolicy can express it: an address and a port. Hostname-based rules are
+// the egress proxy's job — ipBlock cannot match names.
+type EgressAllow struct {
+	CIDR string // canonical, e.g. "10.8.0.0/16" or "203.0.113.7/32"
+	Port int32
+}
+
 type ApplyInput struct {
 	Slug   string
 	Image  string // <registry>/<slug>:<dep_id> as known to Build Service
@@ -122,6 +130,9 @@ type ApplyInput struct {
 	// the S3_* env vars to be set (caller enforces this — usually because
 	// Needs.S3 was true alongside Needs.SQLite).
 	SQLite bool
+	// EgressAllows are the project's admin-configured endpoint rules. Merged
+	// into the egress policy on top of the platform's own services.
+	EgressAllows []EgressAllow
 }
 
 // Litestream defaults — kept as package-level constants so the init / sidecar
@@ -207,13 +218,23 @@ func isPrivateOrLinkLocal(ip net.IP) bool {
 // rather than IPs are skipped — ipBlock can't express DNS names, and leaving
 // them to the catch-all rule errs toward availability rather than breaking a
 // service we failed to parse.
-func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string) error {
+func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string, extra []EgressAllow) error {
 	if len(d.platformServiceEndpoints) == 0 {
 		return nil
 	}
-	// host → ports it may be reached on. 80/443 come along for free: projects
-	// call each other (and the platform's own API) through Traefik by hostname.
+	// CIDR → ports reachable on it. Keyed by CIDR rather than bare host so the
+	// platform's own /32s and an admin's "10.8.0.0/16" live in one structure and
+	// a rule naming an address the platform already publishes just contributes a
+	// port instead of emitting a second, conflicting peer.
 	allowed := map[string]map[int32]struct{}{}
+	addPort := func(cidr string, port int32) {
+		if allowed[cidr] == nil {
+			allowed[cidr] = map[int32]struct{}{}
+		}
+		allowed[cidr][port] = struct{}{}
+	}
+	// Platform data services. 80/443 come along for free: projects reach each
+	// other (and the platform's own API) through Traefik by hostname.
 	for _, ep := range d.platformServiceEndpoints {
 		host, portStr, err := net.SplitHostPort(strings.TrimSpace(ep))
 		if err != nil || net.ParseIP(host) == nil {
@@ -223,28 +244,38 @@ func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string) error {
 		if err != nil || port < 1 || port > 65535 {
 			continue
 		}
-		if allowed[host] == nil {
-			allowed[host] = map[int32]struct{}{80: {}, 443: {}}
-		}
-		allowed[host][int32(port)] = struct{}{}
+		addPort(host+"/32", 80)
+		addPort(host+"/32", 443)
+		addPort(host+"/32", int32(port))
 	}
-	// The registry is published on the platform's public address too, so it has
-	// to join the deny side even when no data service is configured there —
-	// otherwise pods just reach 5001 by the other IP. It gets 80/443 only.
+	// The registry is published on the platform's public address too, so that
+	// address has to reach the deny side even when no data service is configured
+	// there — otherwise pods just reach 5001 by the other IP. 80/443 only.
 	if host, _, err := net.SplitHostPort(strings.TrimSpace(d.registryHostFromCluster)); err == nil {
-		if ip := net.ParseIP(host); ip != nil && !ip.IsLoopback() && allowed[host] == nil {
-			allowed[host] = map[int32]struct{}{80: {}, 443: {}}
+		if ip := net.ParseIP(host); ip != nil && !ip.IsLoopback() && allowed[host+"/32"] == nil {
+			addPort(host+"/32", 80)
+			addPort(host+"/32", 443)
 		}
+	}
+	// Admin-approved per-project endpoint rules.
+	for _, e := range extra {
+		if e.Port < 1 || e.Port > 65535 {
+			continue
+		}
+		if _, _, err := net.ParseCIDR(e.CIDR); err != nil {
+			continue
+		}
+		addPort(e.CIDR, e.Port)
 	}
 	if len(allowed) == 0 {
 		return nil
 	}
 
-	hosts := make([]string, 0, len(allowed))
-	for h := range allowed {
-		hosts = append(hosts, h)
+	cidrs := make([]string, 0, len(allowed))
+	for c := range allowed {
+		cidrs = append(cidrs, c)
 	}
-	sort.Strings(hosts)
+	sort.Strings(cidrs)
 
 	// Everything private is carved out of the catch-all and only handed back
 	// where a project demonstrably needs it:
@@ -269,12 +300,13 @@ func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string) error {
 		"192.168.0.0/16",
 		"169.254.0.0/16",
 	}
-	for _, h := range hosts {
-		if ip := net.ParseIP(h); ip != nil && !isPrivateOrLinkLocal(ip) {
+	for _, c := range cidrs {
+		ip, _, err := net.ParseCIDR(c)
+		if err == nil && !isPrivateOrLinkLocal(ip) {
 			// Public addresses aren't covered by the ranges above, so they need
 			// their own carve-out (the platform's public IP publishes the
 			// registry too).
-			except = append(except, h+"/32")
+			except = append(except, c)
 		}
 	}
 	sort.Strings(except)
@@ -318,9 +350,9 @@ func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string) error {
 			Ports: []netv1.NetworkPolicyPort{{Protocol: &udp, Port: &dnsPort}, {Protocol: &tcp, Port: &dnsPort}},
 		})
 	}
-	for _, h := range hosts {
-		ports := make([]int32, 0, len(allowed[h]))
-		for p := range allowed[h] {
+	for _, c := range cidrs {
+		ports := make([]int32, 0, len(allowed[c]))
+		for p := range allowed[c] {
 			ports = append(ports, p)
 		}
 		sort.Slice(ports, func(i, j int) bool { return ports[i] < ports[j] })
@@ -330,7 +362,7 @@ func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string) error {
 			peerPorts = append(peerPorts, netv1.NetworkPolicyPort{Protocol: &tcp, Port: &pp})
 		}
 		rules = append(rules, netv1.NetworkPolicyEgressRule{
-			To:    []netv1.NetworkPolicyPeer{{IPBlock: &netv1.IPBlock{CIDR: h + "/32"}}},
+			To:    []netv1.NetworkPolicyPeer{{IPBlock: &netv1.IPBlock{CIDR: c}}},
 			Ports: peerPorts,
 		})
 	}
@@ -358,6 +390,13 @@ func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string) error {
 	return err
 }
 
+// SyncEgressPolicy rewrites just the egress policy. Used when an admin edits the
+// allow-list: the workload itself hasn't changed, so re-applying the Deployment
+// (and restarting the pod) to pick up a policy edit would be gratuitous.
+func (d *Deployer) SyncEgressPolicy(ctx context.Context, slug string, allows []EgressAllow) error {
+	return d.ensureEgressPolicy(ctx, slug, allows)
+}
+
 // Apply creates or updates the Deployment, Service, Ingress, and Secret for a project.
 func (d *Deployer) Apply(ctx context.Context, in ApplyInput) error {
 	if err := d.EnsureNamespace(ctx, in.Slug); err != nil {
@@ -366,7 +405,7 @@ func (d *Deployer) Apply(ctx context.Context, in ApplyInput) error {
 	// Reconciled on every deploy rather than only at namespace creation, so
 	// projects that predate the policy (or had it deleted by hand) get it back
 	// without an operator remembering to reapply it.
-	if err := d.ensureEgressPolicy(ctx, in.Slug); err != nil {
+	if err := d.ensureEgressPolicy(ctx, in.Slug, in.EgressAllows); err != nil {
 		return fmt.Errorf("egress policy: %w", err)
 	}
 	if err := d.applySecret(ctx, in); err != nil {

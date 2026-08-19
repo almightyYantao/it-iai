@@ -136,6 +136,34 @@ const (
 	PathRuleModeToken  = "token"
 )
 
+// ProjectEgressRule is one destination a project's pods are allowed to reach.
+// Admin-maintained: pod egress is deny-by-default and projects declare nothing
+// about it themselves.
+type ProjectEgressRule struct {
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+	// Kind decides which layer enforces the rule, and therefore what the value
+	// is allowed to be. See EgressKindDomain / EgressKindEndpoint.
+	Kind string `json:"kind"`
+	// Domain: a hostname, optionally with a leading dot to include subdomains.
+	// Endpoint: an IP or CIDR in canonical form.
+	Value     string     `json:"value"`
+	Port      int        `json:"port"`
+	Note      string     `json:"note"`
+	CreatedAt time.Time  `json:"created_at"`
+	CreatedBy *uuid.UUID `json:"created_by,omitempty"`
+}
+
+const (
+	// EgressKindDomain is enforced by the egress proxy and only covers
+	// HTTP/HTTPS. A hostname here does nothing for other protocols.
+	EgressKindDomain = "domain"
+	// EgressKindEndpoint is enforced by the project's NetworkPolicy and covers
+	// any TCP port, but only names addresses — NetworkPolicy has no notion of
+	// hostnames.
+	EgressKindEndpoint = "endpoint"
+)
+
 type Deployment struct {
 	ID              uuid.UUID        `json:"id"`
 	ProjectID       uuid.UUID        `json:"project_id"`

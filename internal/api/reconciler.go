@@ -73,11 +73,12 @@ func (r *Reconciler) runHealthLoop(ctx context.Context) {
 // writes to the DB, and only when the status actually changes.
 //
 // Rules:
-//   pod Ready  → status='running'  (bumps last_active_at via UpdateProjectStatus)
-//   not Ready  → status='stopped'  (no timestamp bump — we observed it down)
-//   probe err  → no-op             (likely "deployment not found" because the
-//                                   project was never successfully deployed;
-//                                   leave whatever 'created' or 'error' state)
+//
+//	pod Ready  → status='running'  (bumps last_active_at via UpdateProjectStatus)
+//	not Ready  → status='stopped'  (no timestamp bump — we observed it down)
+//	probe err  → no-op             (likely "deployment not found" because the
+//	                                project was never successfully deployed;
+//	                                leave whatever 'created' or 'error' state)
 func (r *Reconciler) reconcileProjectHealth(ctx context.Context) {
 	rows, err := r.srv.store.ListProjectsForHealthReconcile(ctx)
 	if err != nil {
@@ -272,6 +273,16 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 			envs[k] = v
 		}
 
+		// Endpoint half of the project's egress allow-list. A failure here is not
+		// fatal: deploying with the platform's own services reachable but an
+		// admin-added destination missing is recoverable (re-save the rules),
+		// whereas failing the deploy would strand the project on its old image.
+		egressAllows, eaerr := r.srv.egressAllowsForProject(ctx, p.ProjectID)
+		if eaerr != nil {
+			_, _ = r.srv.store.AppendEvent(ctx, p.ID, "deploy", "warn",
+				"could not load egress allow-list, deploying without it: "+eaerr.Error())
+		}
+
 		_ = r.srv.store.MarkDeploymentStatus(ctx, p.ID, model.DeployDeploying, "")
 		_, _ = r.srv.store.AppendEvent(ctx, p.ID, "deploy", "info", "applying Kubernetes manifests")
 		r.srv.bus.Publish(p.ID)
@@ -284,6 +295,9 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 			CPU:    m.Resources.CPU,
 			Memory: m.Resources.Memory,
 			SQLite: m.Needs.SQLite,
+			// Admin-configured endpoint allow-list. Passed on every deploy so a
+			// redeploy can't silently drop rules an admin added since the last one.
+			EgressAllows: egressAllows,
 		}); err != nil {
 			r.fail(ctx, p.ID, "k8s_apply", err.Error())
 			return
