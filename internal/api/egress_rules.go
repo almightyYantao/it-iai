@@ -15,13 +15,15 @@ import (
 	"github.com/iai/vibedeploy/internal/store"
 )
 
-// Ports on the platform host that an egress rule must never re-open. The
+// Ports that must not be re-opened *on the platform's own addresses*. The
 // per-project policy denies these deliberately (unauthenticated image registry,
 // the control-plane's own database, its API, the admin UI's origin), and an
-// endpoint rule pointing at them would quietly undo that from the other side.
+// endpoint rule covering the platform host would quietly undo that from the
+// other side.
 //
-// Not a substitute for the deny — it's here so a well-meaning admin pasting
-// "unblock 5432 for this project" can't hand a workload the platform database.
+// Scoped to the platform's addresses on purpose: 5432 somewhere else is just a
+// database a project legitimately needs, and blanket-blocking the port number
+// would make a corporate Postgres unreachable for no security gain.
 var egressForbiddenPorts = map[int]string{
 	5001: "image registry (unauthenticated)",
 	5432: "control-plane database",
@@ -85,7 +87,7 @@ func (s *Server) handlePutProjectEgress(w http.ResponseWriter, r *http.Request) 
 	seen := map[string]struct{}{}
 	out := make([]store.EgressRuleInput, 0, len(body.Rules))
 	for i, in := range body.Rules {
-		rule, err := normaliseEgressRule(in.Kind, in.Value, in.Port)
+		rule, err := normaliseEgressRule(in.Kind, in.Value, in.Port, s.platformProtectedIPs())
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "bad_rule",
 				"rule "+strconv.Itoa(i+1)+": "+err.Error())
@@ -145,7 +147,7 @@ func (s *Server) handleAdminEgressOverview(w http.ResponseWriter, r *http.Reques
 // say why: the most likely mistake is a hostname entered as an endpoint (or an
 // address entered as a domain), which would be accepted by a laxer check and
 // then silently never match anything.
-func normaliseEgressRule(kind, value string, port int) (store.EgressRuleInput, error) {
+func normaliseEgressRule(kind, value string, port int, protected []net.IP) (store.EgressRuleInput, error) {
 	v := strings.ToLower(strings.TrimSpace(value))
 	switch kind {
 	case model.EgressKindDomain:
@@ -167,10 +169,6 @@ func normaliseEgressRule(kind, value string, port int) (store.EgressRuleInput, e
 		if port < 1 || port > 65535 {
 			return store.EgressRuleInput{}, errors.New("endpoint rules need a port between 1 and 65535")
 		}
-		if what, bad := egressForbiddenPorts[port]; bad {
-			return store.EgressRuleInput{}, errors.New(
-				"port " + strconv.Itoa(port) + " cannot be allowed: " + what)
-		}
 		// Reuse the same normaliser the IP allow-list uses so the two features
 		// never disagree on what a valid address looks like.
 		c, err := normaliseCIDR(v)
@@ -178,6 +176,20 @@ func normaliseEgressRule(kind, value string, port int) (store.EgressRuleInput, e
 			return store.EgressRuleInput{}, errors.New(
 				err.Error() + " — endpoint rules take an IP or CIDR, not a hostname " +
 					"(NetworkPolicy cannot match names; if this is an HTTP service, add it as a domain)")
+		}
+		if what, bad := egressForbiddenPorts[port]; bad {
+			// Only refuse when the range actually reaches the platform host —
+			// including the wide ranges that reach it by accident (10.0.0.0/8,
+			// 0.0.0.0/0), which is exactly how this gets opened up unintentionally.
+			if _, netw, perr := net.ParseCIDR(c); perr == nil {
+				for _, ip := range protected {
+					if netw.Contains(ip) {
+						return store.EgressRuleInput{}, errors.New(
+							"port " + strconv.Itoa(port) + " cannot be allowed on " + c +
+								" because that range covers the platform host (" + ip.String() + "): " + what)
+					}
+				}
+			}
 		}
 		return store.EgressRuleInput{Kind: kind, Value: c, Port: port}, nil
 	}
@@ -251,4 +263,36 @@ func (s *Server) syncEgressForProject(ctx context.Context, p *model.Project) err
 		return err
 	}
 	return s.deployer.SyncEgressPolicy(ctx, p.Slug, allows)
+}
+
+// platformProtectedIPs lists the addresses whose reserved ports an egress rule
+// may not re-open. Derived from config rather than hardcoded so a platform on
+// different addresses is protected without a code change.
+func (s *Server) platformProtectedIPs() []net.IP {
+	raw := []string{
+		s.cfg.UserPGPublicHost, s.cfg.UserRedisPublicHost, s.cfg.UserS3PublicHost,
+		s.cfg.RegistryHost, s.cfg.RegistryHostFromK3D, s.cfg.S3PublicEndpoint,
+	}
+	seen := map[string]struct{}{}
+	out := []net.IP{}
+	for _, hp := range raw {
+		hp = strings.TrimSpace(hp)
+		if hp == "" {
+			continue
+		}
+		host := hp
+		if h, _, err := net.SplitHostPort(hp); err == nil {
+			host = h
+		}
+		ip := net.ParseIP(host)
+		if ip == nil || ip.IsLoopback() {
+			continue
+		}
+		if _, dup := seen[ip.String()]; dup {
+			continue
+		}
+		seen[ip.String()] = struct{}{}
+		out = append(out, ip)
+	}
+	return out
 }
