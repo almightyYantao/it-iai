@@ -71,12 +71,19 @@ export function Audit() {
                       <span className="text-[10.5px] uppercase tracking-[0.12em] text-ink-faint">
                         {e.actor_type}
                       </span>
-                      {/* actor_label is the human-readable identity: email for users,
-                          token name for tokens. Fall back to UUID slice when neither
-                          is resolvable (revoked token, deleted user). */}
+                      {/* actor_label is who is accountable: the user's email, or for a
+                          token the email of whoever issued it. Fall back to the UUID slice
+                          when neither resolves (revoked token, deleted user). */}
                       <div className="text-[12.5px] text-ink-DEFAULT">
                         {e.actor_label || e.actor_id.slice(0, 12)}
                       </div>
+                      {/* Only set when the token isn't already the label, i.e. we resolved a
+                          person and the token is just the path they came through. */}
+                      {e.actor_via && (
+                        <div className="text-[11px] text-ink-faint">
+                          {t("audit.actor.via", { token: e.actor_via })}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 font-mono text-[12px] text-status-flight-fg">{e.action}</td>
                     <td className="px-5 py-3.5 font-mono text-[11.5px] text-ink-faint">

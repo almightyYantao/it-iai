@@ -125,7 +125,8 @@ export interface AuditEntry {
   id: string;
   actor_type: string;
   actor_id: string;
-  actor_label: string; // email (user) or token name (token); falls back to actor_id
+  actor_label: string; // accountable identity: email when resolvable, else token name, else actor_id
+  actor_via?: string; // token the action came through, when that isn't already the label
   action: string;
   project_id?: string | null;
   metadata?: string;

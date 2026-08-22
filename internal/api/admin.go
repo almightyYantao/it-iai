@@ -43,6 +43,40 @@ func parsePager(r *http.Request, defaultLimit, maxLimit int) (limit, offset int)
 // No admin gate: the project list is browsable by every member; mutations on
 // any returned project still go through canManageProject (owner OR admin),
 // so non-owners only get a read-only directory view.
+// resolveActorIdentity turns the audit row's joined columns into the pair the UI
+// renders: who is accountable, and which token they came through.
+//
+// A token name is deliberately NOT treated as an identity. Every browser login
+// mints a token named "oidc-session-<date>" (handleOIDCCallback), so that name
+// is shared by everyone who logged in that day — displaying it alone makes a
+// token-driven action look attributable when it isn't. When the token has an
+// issuer we surface the person and demote the token to "via".
+//
+// Machine-minted tokens (bootstrap-dev, dev-cli) carry created_by = NULL: there
+// is genuinely no person behind them, so the token name becomes the label and
+// via is left empty rather than repeating it.
+func resolveActorIdentity(email, tokenName, tokenOwner *string, actorID string) (label, via string) {
+	deref := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return *p
+	}
+	name, owner := deref(tokenName), deref(tokenOwner)
+
+	switch {
+	case deref(email) != "":
+		return deref(email), ""
+	case owner != "":
+		return owner, name
+	case name != "":
+		return name, ""
+	default:
+		// Token rows still expose the UUID so admins can correlate revoked tokens.
+		return actorID, ""
+	}
+}
+
 func (s *Server) handleAdminProjects(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePager(r, 10, 200)
 	ctx := r.Context()
@@ -151,16 +185,22 @@ func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
 
 	// Joins resolve actor_id → human-readable label:
 	//   user-kind  → users.email
-	//   token-kind → deploy_tokens.name
+	//   token-kind → the person who issued the token (deploy_tokens.created_by
+	//                → users.email), falling back to the token's own name
+	// A token name is not an identity: every browser login mints a token named
+	// "oidc-session-<date>" (see handleOIDCCallback), so everyone who logged in
+	// on the same day shares one name. Resolving through created_by is what
+	// makes a token-driven row attributable to a person.
 	// Comparing as text avoids a CAST that would fail if a row ever held a
 	// non-UUID actor_id (legacy/fixture data).
 	rows, err := s.store.Pool.Query(ctx,
 		`SELECT al.id, al.actor_type, al.actor_id, al.action, al.project_id,
 		        al.metadata, al.created_at,
-		        u.email, dt.name
+		        u.email, dt.name, tu.email
 		 FROM audit_logs al
 		 LEFT JOIN users         u  ON al.actor_type = 'user'  AND u.id::text  = al.actor_id
 		 LEFT JOIN deploy_tokens dt ON al.actor_type = 'token' AND dt.id::text = al.actor_id
+		 LEFT JOIN users         tu ON tu.id = dt.created_by
 		 ORDER BY al.created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "db", err.Error())
@@ -171,7 +211,8 @@ func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
 		ID         string    `json:"id"`
 		ActorType  string    `json:"actor_type"`
 		ActorID    string    `json:"actor_id"`
-		ActorLabel string    `json:"actor_label"` // email (user) or token name (token); falls back to actor_id
+		ActorLabel string    `json:"actor_label"`         // accountable identity: email when resolvable, else token name, else actor_id
+		ActorVia   string    `json:"actor_via,omitempty"` // token the action came through, when that isn't already the label
 		Action     string    `json:"action"`
 		ProjectID  *string   `json:"project_id,omitempty"`
 		Metadata   any       `json:"metadata,omitempty"`
@@ -181,23 +222,15 @@ func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var r row
 		var meta []byte
-		var email, tokenName *string
-		if err := rows.Scan(&r.ID, &r.ActorType, &r.ActorID, &r.Action, &r.ProjectID, &meta, &r.CreatedAt, &email, &tokenName); err != nil {
+		var email, tokenName, tokenOwner *string
+		if err := rows.Scan(&r.ID, &r.ActorType, &r.ActorID, &r.Action, &r.ProjectID, &meta, &r.CreatedAt, &email, &tokenName, &tokenOwner); err != nil {
 			writeError(w, http.StatusInternalServerError, "scan", err.Error())
 			return
 		}
 		if len(meta) > 0 {
 			r.Metadata = string(meta)
 		}
-		switch {
-		case email != nil && *email != "":
-			r.ActorLabel = *email
-		case tokenName != nil && *tokenName != "":
-			r.ActorLabel = *tokenName
-		default:
-			// Token rows still expose the UUID so admins can correlate revoked tokens.
-			r.ActorLabel = r.ActorID
-		}
+		r.ActorLabel, r.ActorVia = resolveActorIdentity(email, tokenName, tokenOwner, r.ActorID)
 		out = append(out, r)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
