@@ -178,6 +178,16 @@ ok "TLSStore/default applied"
 # We REPLACE the entire HelmChartConfig with a known-good values block so the
 # net result is deterministic (vs trying to merge-patch). The values mirror
 # what install-platform.sh writes plus the `redirections` stanza.
+#
+# Because this is a wholesale replace, EVERY setting the cluster needs has to be
+# represented below — anything missing is silently dropped on re-run. That bit
+# us once already: `providers.kubernetesCRD.allowCrossNamespace` was applied by
+# hand for per-project path rules (a16a9e2) and never folded back in here, so a
+# routine cert rotation would have taken out token auth on every project with a
+# rule. Its IngressRoute references the cluster-wide Middleware
+# oauth2-proxy/iai-api-token-verify, and Traefik rejects a cross-namespace
+# Middleware reference without that flag. Keep the block below in sync with
+# install-platform.sh, and add to it rather than hand-patching the cluster.
 
 info "patching Traefik HelmChartConfig (adds web → websecure redirect)"
 mkdir -p /var/lib/rancher/k3s/server/manifests
@@ -189,6 +199,9 @@ metadata:
   namespace: kube-system
 spec:
   valuesContent: |-
+    providers:
+      kubernetesCRD:
+        allowCrossNamespace: true
     deployment:
       kind: DaemonSet
       # hostNetwork: true (below) makes the pod use the host's
