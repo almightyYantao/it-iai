@@ -58,6 +58,14 @@ type ControlPlane struct {
 	// see k8sdriver.ensureEgressPolicy. Default is k3s's (service CIDR .10).
 	DNSClusterIP string `env:"CP_DNS_CLUSTER_IP" envDefault:"10.43.0.10"`
 
+	// Keep user pods off the platform's own node. User pods reach their
+	// Postgres / Redis / S3 at the platform host's address, which is not
+	// connectable from a pod on that same host — see
+	// k8sdriver.schedulingConstraints. On by default; the deployer drops the
+	// constraint on its own when the cluster has no agent node, so
+	// single-node installs keep working without setting this.
+	AvoidControlPlaneNodes bool `env:"CP_K8S_AVOID_CONTROL_PLANE" envDefault:"true"`
+
 	// Hard cap on how many custom hostnames a single project can register
 	// (vanity subdomain + fully-custom FQDN combined). The default subdomain
 	// <slug>.<base> is platform-issued and doesn't count. Default 1 keeps

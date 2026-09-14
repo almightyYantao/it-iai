@@ -50,7 +50,8 @@ var ingressRouteGVR = schema.GroupVersionResource{
 const apiTokenVerifyMiddlewareRef = "oauth2-proxy-iai-api-token-verify@kubernetescrd"
 
 type Deployer struct {
-	cs           *kubernetes.Clientset
+	// Interface rather than *Clientset so tests can inject a fake.
+	cs           kubernetes.Interface
 	dyn          dynamic.Interface // for Traefik Middleware CRs we don't import directly
 	baseDomain   string
 	ingressClass string
@@ -67,6 +68,8 @@ type Deployer struct {
 	// ClusterIP of kube-dns. Only used as a second way to name DNS in the egress
 	// policy; empty just drops that rule.
 	dnsClusterIP string
+	// Keep user pods off the platform's own node — see schedulingConstraints.
+	avoidControlPlaneNodes bool
 }
 
 type DeployerOpts struct {
@@ -82,6 +85,9 @@ type DeployerOpts struct {
 	// DNSClusterIP is kube-dns's ClusterIP (k3s default 10.43.0.10). Named in the
 	// egress policy alongside the kube-dns pod selector; empty drops that rule.
 	DNSClusterIP string
+	// AvoidControlPlaneNodes keeps user pods off the node that runs the
+	// platform's own services. See schedulingConstraints for why that matters.
+	AvoidControlPlaneNodes bool
 }
 
 func New(opts DeployerOpts) (*Deployer, error) {
@@ -106,6 +112,7 @@ func New(opts DeployerOpts) (*Deployer, error) {
 		registryHostFromCluster:  opts.RegistryHostFromCluster,
 		platformServiceEndpoints: opts.PlatformServiceEndpoints,
 		dnsClusterIP:             opts.DNSClusterIP,
+		avoidControlPlaneNodes:   opts.AvoidControlPlaneNodes,
 	}, nil
 }
 
@@ -468,6 +475,81 @@ func (d *Deployer) applySecret(ctx context.Context, in ApplyInput) error {
 	return err
 }
 
+// k3s labels its server nodes node-role.kubernetes.io/control-plane. Agents
+// carry no such label, so "anywhere but the platform node" can be expressed
+// without hand-labelling every agent — a newly joined agent is eligible the
+// moment it registers.
+const controlPlaneNodeLabel = "node-role.kubernetes.io/control-plane"
+
+// schedulingConstraints keeps user pods off the node that runs the platform's
+// own Postgres / Redis / MinIO.
+//
+// Pods reach those services through the platform host's address rather than a
+// Service — the host:port pairs in platformServiceEndpoints, which is also what
+// lands in DATABASE_URL / REDIS_URL / S3_ENDPOINT. From an agent that is an
+// ordinary connection to another machine. From a pod on the platform node the
+// destination is that node's own IP, and the connection is refused, so the pod
+// comes up with no database and no object storage. Nothing crashes: the app
+// starts, serves traffic, and fails every backing-service call. A SQLite
+// project is worse off still — litestream cannot reach the bucket to restore,
+// so the app starts on an empty file as if it were a fresh install.
+//
+// The constraint is required rather than preferred on purpose. Landing on the
+// platform node is a hard failure, so "prefer an agent but schedule here under
+// pressure" would reintroduce the bug exactly when the cluster is busiest.
+//
+// Single-node installs have no agent to fall back to, so the constraint is
+// dropped when no schedulable non-control-plane node exists — that mode is
+// documented as supported, and leaving every deploy Pending would be a worse
+// failure than the one being prevented.
+func (d *Deployer) schedulingConstraints(ctx context.Context) (*corev1.Affinity, error) {
+	if !d.avoidControlPlaneNodes {
+		return nil, nil
+	}
+	agents, err := d.hasSchedulableAgentNode(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !agents {
+		return nil, nil
+	}
+	return &corev1.Affinity{
+		NodeAffinity: &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+					MatchExpressions: []corev1.NodeSelectorRequirement{{
+						Key:      controlPlaneNodeLabel,
+						Operator: corev1.NodeSelectorOpDoesNotExist,
+					}},
+				}},
+			},
+		},
+	}, nil
+}
+
+// hasSchedulableAgentNode reports whether the cluster has at least one Ready,
+// non-cordoned node without the control-plane label — i.e. somewhere for a
+// user pod to go once the platform node is excluded.
+func (d *Deployer) hasSchedulableAgentNode(ctx context.Context) (bool, error) {
+	nodes, err := d.cs.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		LabelSelector: "!" + controlPlaneNodeLabel,
+	})
+	if err != nil {
+		return false, fmt.Errorf("list nodes: %w", err)
+	}
+	for _, n := range nodes.Items {
+		if n.Spec.Unschedulable {
+			continue
+		}
+		for _, c := range n.Status.Conditions {
+			if c.Type == corev1.NodeReady && c.Status == corev1.ConditionTrue {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 func (d *Deployer) applyDeployment(ctx context.Context, in ApplyInput) error {
 	ns := d.namespaceFor(in.Slug)
 	name := "app"
@@ -520,6 +602,12 @@ func (d *Deployer) applyDeployment(ctx context.Context, in ApplyInput) error {
 	podSpec := corev1.PodSpec{
 		Containers: []corev1.Container{appContainer},
 	}
+
+	affinity, err := d.schedulingConstraints(ctx)
+	if err != nil {
+		return fmt.Errorf("scheduling constraints: %w", err)
+	}
+	podSpec.Affinity = affinity
 
 	// SQLite + Litestream wiring. When the manifest says needs.sqlite, the
 	// pod gets:
