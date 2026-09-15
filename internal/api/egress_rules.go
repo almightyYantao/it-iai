@@ -122,6 +122,22 @@ func (s *Server) handlePutProjectEgress(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Domain rules only mean something once the proxy config is regenerated.
+	// Allocate the listener lazily here rather than at project creation, so a
+	// project that never needs egress never consumes a port.
+	if _, err := s.store.EnsureEgressProxyPort(r.Context(), p.ID); err != nil {
+		s.store.WriteAudit(r.Context(), string(actor.Kind), actor.identityString(),
+			"project.egress.port_alloc_failed", &p.ID, map[string]string{"error": err.Error()})
+	}
+	// Best-effort: the rules are saved and the NetworkPolicy is already in sync.
+	// Failing the request now would leave the admin unsure whether their edit
+	// landed, when the only thing outstanding is a proxy reload the startup
+	// sweep will also fix.
+	if err := s.syncEgressProxy(r.Context()); err != nil {
+		s.store.WriteAudit(r.Context(), string(actor.Kind), actor.identityString(),
+			"project.egress.proxy_sync_failed", &p.ID, map[string]string{"error": err.Error()})
+	}
+
 	s.store.WriteAudit(r.Context(), string(actor.Kind), actor.identityString(),
 		"project.egress.update", &p.ID, map[string]any{"rules": len(out)})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "rules": len(out)})

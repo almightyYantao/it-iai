@@ -127,6 +127,10 @@ func runServer() {
 		// (or any DB → cluster drift) gets reflected without waiting on a
 		// redeploy. Runs in the background to avoid delaying the HTTP listen.
 		go server.SweepIngressesAtStartup(ctx)
+		// Same idea for the egress proxy: rebuild its config from the DB so a
+		// change made while the control plane was down (or a hand-edited
+		// ConfigMap) converges without waiting for the next allow-list edit.
+		go server.SweepEgressProxyAtStartup(ctx)
 	}
 
 	httpSrv := &http.Server{
