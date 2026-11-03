@@ -488,6 +488,23 @@ const zh: Dict = {
   "settings.toast.saved": "已保存，{{count}} 项更新。",
   "settings.toast.failed": "保存失败：{{error}}",
 
+  // Project access (admin)
+  "access.section.title": "项目访问控制",
+  "access.section.desc": "公网可以访问平台入口，项目只认白名单。项目整体只能选预设；外部来源（如 webhook）只能挂在单条路径上，且必须用 Token 校验。",
+  "access.project": "项目",
+  "access.project.pick": "选择项目…",
+  "access.preset": "访问预设",
+  "access.rules": "路径规则",
+  "access.rules.empty": "暂无路径规则",
+  "access.rule.prefix": "路径前缀",
+  "access.rule.mode": "校验方式",
+  "access.rule.cidrs": "外部来源 IP（每行一个，仅本路径生效）",
+  "access.rule.add": "添加路径规则",
+  "access.rule.delete": "删除",
+  "access.rule.token_required": "填写外部 IP 时必须选 Token",
+  "access.save": "保存",
+  "access.saved": "已保存并生效",
+
   // Access presets section
   "presets.section.title": "访问预设",
   "presets.section.desc":
@@ -978,6 +995,22 @@ const en: Dict = {
   "settings.toast.saved": "Saved. {{count}} field(s) updated.",
   "settings.toast.failed": "Save failed: {{error}}",
 
+  // Project access (admin)
+  "access.section.title": "Project access",
+  "access.section.desc": "Ingress is internet-reachable; projects admit only their allow-list. A project picks a preset; external sources (e.g. webhooks) attach to a single path and require token auth.",
+  "access.project": "Project",
+  "access.project.pick": "Pick a project…",
+  "access.preset": "Access preset",
+  "access.rules": "Path rules",
+  "access.rules.empty": "No path rules",
+  "access.rule.prefix": "Path prefix",
+  "access.rule.mode": "Auth",
+  "access.rule.cidrs": "External source IPs (one per line, this path only)",
+  "access.rule.add": "Add path rule",
+  "access.rule.delete": "Delete",
+  "access.rule.token_required": "External IPs require token mode",
+  "access.save": "Save",
+  "access.saved": "Saved and applied",
   "presets.section.title": "Access presets",
   "presets.section.desc":
     "Globally-maintained IP allow-lists that projects pick from. Editing a preset re-syncs every project pointing at it — no redeploys needed.",

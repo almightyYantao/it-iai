@@ -38,6 +38,9 @@ func (r *Reconciler) Run(ctx context.Context) {
 	//   - healthTick (30s) re-checks live projects against the cluster so the
 	//     DB status doesn't drift (e.g. pod evicted, node drained, manual
 	//     kubectl scale --replicas=0)
+	if err := r.srv.syncPlatformAllowList(ctx); err != nil {
+		log.Printf("platform allow-list sync: %v", err)
+	}
 	go r.runHealthLoop(ctx)
 
 	t := time.NewTicker(r.interval)

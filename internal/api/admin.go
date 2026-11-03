@@ -91,7 +91,8 @@ func (s *Server) handleAdminProjects(w http.ResponseWriter, r *http.Request) {
 
 	const q = `
 		SELECT p.id, p.slug, p.name, p.owner_id, p.visibility, p.status, p.created_at,
-		       p.last_pushed_at, p.last_active_at, u.email
+		       p.last_pushed_at, p.last_active_at, u.email,
+		       p.access_preset, coalesce(p.allow_cidrs, '{}')
 		FROM projects p
 		LEFT JOIN users u ON u.id = p.owner_id
 		WHERE p.deleted_at IS NULL
@@ -116,12 +117,14 @@ func (s *Server) handleAdminProjects(w http.ResponseWriter, r *http.Request) {
 		LastPushedAt *time.Time `json:"last_pushed_at,omitempty"`
 		LastActiveAt *time.Time `json:"last_active_at,omitempty"`
 		URL          string     `json:"url"`
+		AccessPreset *string    `json:"access_preset,omitempty"`
+		AllowCIDRs   []string   `json:"allow_cidrs"`
 	}
 	out := []row{}
 	for rows.Next() {
 		var r row
 		var ownerEmail *string
-		if err := rows.Scan(&r.ID, &r.Slug, &r.Name, &r.OwnerID, &r.Visibility, &r.Status, &r.CreatedAt, &r.LastPushedAt, &r.LastActiveAt, &ownerEmail); err != nil {
+		if err := rows.Scan(&r.ID, &r.Slug, &r.Name, &r.OwnerID, &r.Visibility, &r.Status, &r.CreatedAt, &r.LastPushedAt, &r.LastActiveAt, &ownerEmail, &r.AccessPreset, &r.AllowCIDRs); err != nil {
 			writeError(w, http.StatusInternalServerError, "scan", err.Error())
 			return
 		}

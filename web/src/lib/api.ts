@@ -144,7 +144,7 @@ export const api = {
       "GET",
       `/v1/projects/${encodeURIComponent(slug)}/path-rules`,
     ),
-  createProjectPathRule: (slug: string, body: { path_prefix: string; mode: "no_auth" | "token" }) =>
+  createProjectPathRule: (slug: string, body: { path_prefix: string; mode: "no_auth" | "token"; allow_cidrs?: string[] }) =>
     request<{ rule: import("./types").ProjectPathRule }>(
       "POST",
       `/v1/projects/${encodeURIComponent(slug)}/path-rules`,
@@ -153,7 +153,7 @@ export const api = {
   updateProjectPathRule: (
     slug: string,
     id: string,
-    body: { path_prefix: string; mode: "no_auth" | "token" },
+    body: { path_prefix: string; mode: "no_auth" | "token"; allow_cidrs?: string[] },
   ) =>
     request<{ rule: import("./types").ProjectPathRule }>(
       "PATCH",

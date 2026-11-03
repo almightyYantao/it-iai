@@ -55,6 +55,8 @@ export interface ProjectPathRule {
   project_id: string;
   path_prefix: string;
   mode: "no_auth" | "token";
+  // External sources admitted for this prefix only (admin-set, token mode).
+  allow_cidrs: string[];
   created_at: string;
   updated_at: string;
 }

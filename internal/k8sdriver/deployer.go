@@ -2,6 +2,7 @@ package k8sdriver
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net"
 	"sort"
@@ -758,6 +759,9 @@ type IngressHostsInput struct {
 type PathRule struct {
 	PathPrefix string
 	Mode       string
+	// AllowCIDRs, when non-empty, replaces the project allow-list for this
+	// prefix only (caller passes project list + extra external sources).
+	AllowCIDRs []string
 }
 
 // SyncIngressHostnames replaces the project's Ingress rules with one rule per
@@ -823,7 +827,7 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 		if err != nil && !apierr.IsNotFound(err) {
 			return fmt.Errorf("delete IngressRoute: %w", err)
 		}
-		return nil
+		return d.pruneRuleAllowLists(ctx, ns, slug, nil)
 	}
 
 	// Sort rules longest-prefix-first so traefik's explicit priority picks the
@@ -867,8 +871,17 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 	// hundreds) and decrement by prefix length so longer prefixes still win
 	// within the IngressRoute itself.
 	const basePriority = 100_000
+	wanted := map[string]bool{}
 	for i, rule := range ordered {
 		mws := append([]any(nil), baseMWs...)
+		if len(rule.AllowCIDRs) > 0 {
+			mwName := pathAllowListName(slug, rule.PathPrefix)
+			if err := d.upsertAllowList(ctx, ns, slug, mwName, rule.AllowCIDRs); err != nil {
+				return err
+			}
+			wanted[mwName] = true
+			mws = []any{map[string]any{"name": mwName, "namespace": ns}}
+		}
 		switch rule.Mode {
 		case "token":
 			// allow-list is in-project; api-token-verify is cluster-wide so we
@@ -892,6 +905,10 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 			}},
 			"middlewares": mws,
 		})
+	}
+
+	if err := d.pruneRuleAllowLists(ctx, ns, slug, wanted); err != nil {
+		return err
 	}
 
 	spec := map[string]any{
@@ -941,9 +958,12 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 // the same object rather than churning resources.
 func allowListMiddlewareName(slug string) string { return "iai-allowlist-" + slug }
 
+// denyAllCIDR is the allow-list used when a project resolves to no CIDRs.
+const denyAllCIDR = "127.0.0.1/32"
+
 // syncIPAllowList creates or updates an IPAllowList Traefik Middleware for the
 // project. Returns the Middleware name (empty when none should be attached).
-// An empty cidrs slice causes the Middleware to be deleted.
+// An empty cidrs slice pins it to denyAllCIDR (fail closed); it is never deleted.
 func (d *Deployer) syncIPAllowList(ctx context.Context, slug string, cidrs []string) (string, error) {
 	ns := d.namespaceFor(slug)
 	name := allowListMiddlewareName(slug)
@@ -964,12 +984,10 @@ func (d *Deployer) syncIPAllowList(ctx context.Context, slug string, cidrs []str
 	}
 
 	if len(clean) == 0 {
-		// Delete the Middleware so the Ingress goes back to "open access".
-		err := d.dyn.Resource(middlewareGVR).Namespace(ns).Delete(ctx, name, metav1.DeleteOptions{})
-		if err != nil && !apierr.IsNotFound(err) {
-			return "", fmt.Errorf("delete IPAllowList middleware: %w", err)
-		}
-		return "", nil
+		// Fail closed: an empty list used to delete the Middleware and leave
+		// the project open to any source. Now it pins the allow-list to
+		// loopback, which no external client can match.
+		clean = []string{denyAllCIDR}
 	}
 
 	cidrIface := make([]any, len(clean))
@@ -1409,4 +1427,88 @@ func (d *Deployer) DeleteProject(ctx context.Context, slug string) error {
 		return err
 	}
 	return nil
+}
+
+// pathAllowListName names the per-rule allow-list. Hash of the prefix keeps it
+// a valid DNS label whatever characters the prefix contains.
+func pathAllowListName(slug, prefix string) string {
+	h := sha256.Sum256([]byte(prefix))
+	return fmt.Sprintf("iai-allowlist-%s-p%x", slug, h[:4])
+}
+
+const ruleAllowListLabel = "iai.io/path-allowlist"
+
+// upsertAllowList writes a per-rule IPAllowList middleware.
+func (d *Deployer) upsertAllowList(ctx context.Context, ns, slug, name string, cidrs []string) error {
+	src := make([]any, 0, len(cidrs))
+	for _, c := range cidrs {
+		src = append(src, c)
+	}
+	labels := map[string]any{ruleAllowListLabel: "true"}
+	for k, v := range appLabels(slug) {
+		labels[k] = v
+	}
+	body := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "traefik.io/v1alpha1",
+		"kind":       "Middleware",
+		"metadata":   map[string]any{"name": name, "namespace": ns, "labels": labels},
+		"spec":       map[string]any{"ipAllowList": map[string]any{"sourceRange": src}},
+	}}
+	res := d.dyn.Resource(middlewareGVR).Namespace(ns)
+	cur, err := res.Get(ctx, name, metav1.GetOptions{})
+	if apierr.IsNotFound(err) {
+		_, err = res.Create(ctx, body, metav1.CreateOptions{})
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	body.SetResourceVersion(cur.GetResourceVersion())
+	_, err = res.Update(ctx, body, metav1.UpdateOptions{})
+	return err
+}
+
+// pruneRuleAllowLists deletes per-rule allow-lists no longer referenced, so a
+// removed external source stops being admitted.
+func (d *Deployer) pruneRuleAllowLists(ctx context.Context, ns, slug string, keep map[string]bool) error {
+	res := d.dyn.Resource(middlewareGVR).Namespace(ns)
+	list, err := res.List(ctx, metav1.ListOptions{LabelSelector: ruleAllowListLabel + "=true"})
+	if err != nil {
+		if apierr.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("list path allow-lists: %w", err)
+	}
+	for _, it := range list.Items {
+		if keep[it.GetName()] {
+			continue
+		}
+		if err := res.Delete(ctx, it.GetName(), metav1.DeleteOptions{}); err != nil && !apierr.IsNotFound(err) {
+			return fmt.Errorf("delete path allow-list %s: %w", it.GetName(), err)
+		}
+	}
+	return nil
+}
+
+// Platform entrypoints (admin-ui, oauth2-proxy) aren't projects, so they share
+// one allow-list mirrored from the `internal` preset. Both Ingresses reference
+// it as kube-system-iai-internal-allowlist@kubernetescrd.
+const (
+	PlatformAllowListNamespace = "kube-system"
+	PlatformAllowListName      = "iai-internal-allowlist"
+)
+
+// SyncPlatformAllowList writes the platform allow-list. Empty pins it to
+// denyAllCIDR, same fail-closed rule as projects.
+func (d *Deployer) SyncPlatformAllowList(ctx context.Context, cidrs []string) error {
+	clean := []string{}
+	for _, c := range cidrs {
+		if c = strings.TrimSpace(c); c != "" {
+			clean = append(clean, c)
+		}
+	}
+	if len(clean) == 0 {
+		clean = []string{denyAllCIDR}
+	}
+	return d.upsertAllowList(ctx, PlatformAllowListNamespace, "platform", PlatformAllowListName, clean)
 }

@@ -20,14 +20,36 @@ import (
 // no restriction — preferable to accidentally locking out an app because the
 // DB blipped.
 func (s *Server) effectiveAllowCIDRs(ctx context.Context, p *model.Project) []string {
-	if p.AccessPreset == nil || *p.AccessPreset == "" {
-		return p.AllowCIDRs
+	// Ingress is reachable from the internet once the security group opens
+	// 443, so this list is the only network gate. Fail closed: the retired
+	// `public` preset, an unresolvable preset and world-open CIDRs all fall
+	// back to `internal`; nothing here can widen access to everyone.
+	//
+	var base []string
+	if p.AccessPreset != nil && *p.AccessPreset != "" && *p.AccessPreset != "public" {
+		if pr, err := s.store.GetCIDRPreset(ctx, *p.AccessPreset); err == nil && pr != nil {
+			base = pr.CIDRs
+		}
 	}
-	pr, err := s.store.GetCIDRPreset(ctx, *p.AccessPreset)
-	if err != nil || pr == nil {
-		return nil
+	if len(base) == 0 || hasWorldCIDR(base) {
+		base = nil
+		if pr, err := s.store.GetCIDRPreset(ctx, "internal"); err == nil && pr != nil && !hasWorldCIDR(pr.CIDRs) {
+			base = pr.CIDRs
+		}
 	}
-	return pr.CIDRs
+	return base // empty → deployer installs a deny-all allow-list
+}
+
+// hasWorldCIDR reports whether any entry opens the allow-list to everyone.
+func hasWorldCIDR(cidrs []string) bool {
+	for _, c := range cidrs {
+		if _, n, err := net.ParseCIDR(strings.TrimSpace(c)); err == nil {
+			if ones, _ := n.Mask.Size(); ones == 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // normaliseCIDR validates a single CIDR or bare IP and returns the canonical
@@ -127,26 +149,35 @@ func (s *Server) syncIngressForProject(ctx context.Context, p *model.Project) er
 	// "public" means literally no auth gate — everyone on the network can hit
 	// the URL. "org" and "restricted" both go behind oauth2-proxy; "restricted"
 	// further requires a collaborator entry, but that's app-level, not L7.
-	requireAuth := p.Visibility != model.VisibilityPublic
+	requireAuth := true // `public` visibility is retired; internal ingress always sits behind SSO
 
 	// Path-prefix overrides ride on a separate IngressRoute. Best-effort: a
 	// failure to load rules shouldn't strand the ingress sync — log via the
 	// audit channel and proceed with no rules (which keeps the project's
 	// default visibility in force, the safe fallback).
+	allow := s.effectiveAllowCIDRs(ctx, p)
 	var pathRules []k8sdriver.PathRule
 	if rules, err := s.store.ListProjectPathRules(ctx, p.ID); err == nil {
 		for _, r := range rules {
-			pathRules = append(pathRules, k8sdriver.PathRule{
-				PathPrefix: r.PathPrefix,
-				Mode:       r.Mode,
-			})
+			pr := k8sdriver.PathRule{PathPrefix: r.PathPrefix, Mode: r.Mode}
+			// External sources widen this prefix only: project allow-list +
+			// the rule's own CIDRs (world-open entries never pass).
+			if len(r.AllowCIDRs) > 0 {
+				pr.AllowCIDRs = append([]string(nil), allow...)
+				for _, c := range r.AllowCIDRs {
+					if !hasWorldCIDR([]string{c}) {
+						pr.AllowCIDRs = append(pr.AllowCIDRs, c)
+					}
+				}
+			}
+			pathRules = append(pathRules, pr)
 		}
 	}
 
 	return s.deployer.SyncIngressHostnames(ctx, k8sdriver.IngressHostsInput{
 		Slug:        p.Slug,
 		Hostnames:   hostnames,
-		AllowCIDRs:  s.effectiveAllowCIDRs(ctx, p),
+		AllowCIDRs:  allow,
 		RequireAuth: requireAuth,
 		TLSEnabled:  p.TLSEnabled,
 		PathRules:   pathRules,
@@ -186,12 +217,14 @@ func accessPolicyFrozen(w http.ResponseWriter, what string) {
 // project owner or an admin could change this; collaborators explicitly could
 // not, because access policy is not a development concern.
 func (s *Server) handlePatchProjectAccess(w http.ResponseWriter, r *http.Request) {
-	if !accessPolicySelfService {
+	p := projectFrom(r.Context())
+	actor, _ := ActorFrom(r.Context())
+	// Owners lost self-service; platform admins edit per-project allow-lists
+	// from the settings page.
+	if !accessPolicySelfService && !isAdminActor(actor) {
 		accessPolicyFrozen(w, "IP allow-list / access preset")
 		return
 	}
-	p := projectFrom(r.Context())
-	actor, _ := ActorFrom(r.Context())
 	if !s.canManageProject(actor, p) {
 		writeError(w, http.StatusForbidden, "not_authorised", "only the project owner or an admin can change access policy")
 		return
