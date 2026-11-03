@@ -5,7 +5,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -80,6 +79,7 @@ func (s *Server) handleGetEgressMode(w http.ResponseWriter, r *http.Request) {
 }
 
 type proxyLine struct {
+	ts     float64
 	port   int
 	status string // e.g. TCP_TUNNEL/200, TCP_DENIED/403
 	host   string
@@ -108,7 +108,8 @@ func parseProxyLog(raw string) []proxyLine {
 		if i := strings.LastIndex(host, ":"); i >= 0 {
 			host = host[:i]
 		}
-		out = append(out, proxyLine{port: port, status: f[2], host: host})
+		ts, _ := strconv.ParseFloat(f[0], 64)
+		out = append(out, proxyLine{ts: ts, port: port, status: f[2], host: host})
 	}
 	return out
 }
@@ -148,8 +149,8 @@ func (s *Server) handleEgressProxyStatus(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// GET /v1/projects/:slug/egress-report — domains seen in the proxy log for
-// this project, most frequent first. Admin only.
+// GET /v1/projects/:slug/egress-report — domains the proxy has seen for this
+// project (persisted by the collector), most frequent first. Admin only.
 func (s *Server) handleEgressReport(w http.ResponseWriter, r *http.Request) {
 	actor, _ := ActorFrom(r.Context())
 	if !isAdminActor(actor) {
@@ -157,40 +158,114 @@ func (s *Server) handleEgressReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := projectFrom(r.Context())
-	ctx := r.Context()
-	_, port, err := s.store.GetProjectEgressMode(ctx, p.ID)
 	type row struct {
-		Host    string `json:"host"`
-		Allowed int    `json:"allowed"`
-		Denied  int    `json:"denied"`
+		Host      string    `json:"host"`
+		Allowed   int64     `json:"allowed"`
+		Denied    int64     `json:"denied"`
+		FirstSeen time.Time `json:"first_seen"`
+		LastSeen  time.Time `json:"last_seen"`
 	}
 	out := []row{}
-	if err != nil || port == 0 || s.deployer == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"domains": out})
+	rows, err := s.store.Pool.Query(r.Context(),
+		`SELECT host, allowed, denied, first_seen, last_seen FROM egress_domain_stats
+		  WHERE project_id = $1 ORDER BY allowed + denied DESC, host LIMIT 500`, p.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "db", err.Error())
 		return
 	}
-	raw, _ := s.deployer.ProxyLogs(ctx, 20000)
-	agg := map[string]*row{}
+	defer rows.Close()
+	for rows.Next() {
+		var x row
+		if err := rows.Scan(&x.Host, &x.Allowed, &x.Denied, &x.FirstSeen, &x.LastSeen); err == nil {
+			out = append(out, x)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"domains": out})
+}
+
+// RunEgressLogCollector folds the proxy access log into egress_domain_stats
+// every interval. Resumes from the newest last_seen so a control-plane restart
+// doesn't double count; lines at or before that instant are skipped.
+func (s *Server) RunEgressLogCollector(ctx context.Context, interval time.Duration) {
+	if s.deployer == nil {
+		return
+	}
+	var cursor float64
+	var last *time.Time
+	if err := s.store.Pool.QueryRow(ctx, `SELECT max(last_seen) FROM egress_domain_stats`).Scan(&last); err == nil && last != nil {
+		cursor = float64(last.UnixMilli()) / 1000
+	}
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		if c, err := s.collectEgressLog(ctx, cursor); err != nil {
+			log.Printf("egress log collector: %v", err)
+		} else {
+			cursor = c
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+func (s *Server) collectEgressLog(ctx context.Context, cursor float64) (float64, error) {
+	raw, err := s.deployer.ProxyLogs(ctx, 20000)
+	if err != nil {
+		return cursor, err
+	}
+	ports, err := s.store.ProxyPortSlugs(ctx)
+	if err != nil {
+		return cursor, err
+	}
+	type key struct{ slug, host string }
+	type agg struct {
+		allowed, denied int64
+		first, last     float64
+	}
+	m := map[key]*agg{}
+	next := cursor
 	for _, l := range parseProxyLog(raw) {
-		if l.port != port || l.host == "" {
+		if l.ts <= cursor || l.host == "" {
 			continue
 		}
-		x := agg[l.host]
-		if x == nil {
-			x = &row{Host: l.host}
-			agg[l.host] = x
+		slug, ok := ports[l.port]
+		if !ok {
+			continue
+		}
+		k := key{slug, l.host}
+		a := m[k]
+		if a == nil {
+			a = &agg{first: l.ts}
+			m[k] = a
 		}
 		if strings.Contains(l.status, "DENIED") {
-			x.Denied++
+			a.denied++
 		} else {
-			x.Allowed++
+			a.allowed++
+		}
+		a.last = l.ts
+		if l.ts > next {
+			next = l.ts
 		}
 	}
-	for _, x := range agg {
-		out = append(out, *x)
+	for k, a := range m {
+		_, err := s.store.Pool.Exec(ctx, `
+			INSERT INTO egress_domain_stats (project_id, host, allowed, denied, first_seen, last_seen)
+			SELECT id, $2, $3, $4, to_timestamp($5), to_timestamp($6) FROM projects
+			 WHERE slug = $1 AND deleted_at IS NULL
+			ON CONFLICT (project_id, host) DO UPDATE SET
+			    allowed = egress_domain_stats.allowed + EXCLUDED.allowed,
+			    denied  = egress_domain_stats.denied + EXCLUDED.denied,
+			    last_seen = greatest(egress_domain_stats.last_seen, EXCLUDED.last_seen)`,
+			k.slug, k.host, a.allowed, a.denied, a.first, a.last)
+		if err != nil {
+			return cursor, err
+		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Allowed+out[i].Denied > out[j].Allowed+out[j].Denied })
-	writeJSON(w, http.StatusOK, map[string]any{"domains": out})
+	return next, nil
 }
 
 // SweepEgressModesAtStartup converges every project whose egress mode isn't

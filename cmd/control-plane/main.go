@@ -134,6 +134,7 @@ func runServer() {
 			server.SweepEgressProxyAtStartup(ctx)
 			server.SweepEgressModesAtStartup(ctx)
 		}()
+		go server.RunEgressLogCollector(ctx, 30*time.Second)
 	}
 
 	httpSrv := &http.Server{

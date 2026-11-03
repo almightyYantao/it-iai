@@ -49,7 +49,7 @@ pid_filename none
 # TCP_DENIED lines are how an admin learns what a project still needs.
 logfile_rotate 0
 # %>lp is the listener port, which identifies the project.
-logformat iai %ts %>lp %Ss/%03>Hs %rm %ru
+logformat iai %ts.%03tu %>lp %Ss/%03>Hs %rm %ru
 access_log stdio:/dev/stdout iai
 
 # No via/forwarded headers announcing the proxy, and no client address leak.

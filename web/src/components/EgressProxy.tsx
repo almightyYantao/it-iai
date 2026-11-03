@@ -123,6 +123,7 @@ export function EgressModePanel({ slug, notify }: { slug: string; notify: (ok: b
                 <li key={d.host} className="flex items-center justify-between gap-3 px-3 py-2 text-[12.5px]">
                   <code className="truncate font-mono text-ink-strong">{d.host}</code>
                   <span className="shrink-0 tabular-nums text-ink-muted">
+                    <span className="mr-3 text-ink-faint">{timeAgo(d.last_seen)}</span>
                     {d.allowed} ✓{d.denied > 0 && <span className="ml-2 text-status-fail-fg">{d.denied} ✕</span>}
                   </span>
                 </li>
