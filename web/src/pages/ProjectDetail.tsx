@@ -12,7 +12,9 @@ import { Pagination, type PaginationState } from "../components/Pagination";
 import { CollaboratorsPanel } from "../components/CollaboratorsPanel";
 import { DomainsPanel } from "../components/DomainsPanel";
 import { EnvPanel } from "../components/EnvPanel";
-import { ProjectAccessPanel } from "../components/ProjectAccessPanel";
+// ProjectAccessPanel is intentionally not mounted — see the commented-out
+// render below. noUnusedLocals would fail the build on a dangling import.
+// import { ProjectAccessPanel } from "../components/ProjectAccessPanel";
 import { ProjectNamePanel } from "../components/ProjectNamePanel";
 import { ProjectTLSPanel } from "../components/ProjectTLSPanel";
 import { ProjectAPIAccessPanel } from "../components/ProjectAPIAccessPanel";
@@ -96,7 +98,7 @@ export function ProjectDetail() {
             href={p.url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-line bg-canvas-surface hover:bg-canvas-raised px-3 py-1.5 text-[12.5px] font-medium font-mono text-ink-DEFAULT transition"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line bg-canvas-surface hover:bg-canvas-raised px-3 py-1.5 text-[12.5px] font-medium font-mono text-ink transition"
           >
             {p.url.replace(/^https?:\/\//, "")}
             <ExternalIcon className="size-3.5 opacity-70" />
@@ -105,7 +107,7 @@ export function ProjectDetail() {
       />
 
       {pod && (
-        <section className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 rounded-lg border border-line-subtle bg-canvas-surface px-5 py-4">
+        <section className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 rounded-lg border border-line-subtle bg-canvas-base px-5 py-4">
           <PodStat label={t("project.pod.node")} value={pod.node || "—"} mono />
           <PodStat label={t("project.pod.phase")} value={pod.ready ? `${pod.phase} · Ready` : pod.phase || "—"} />
           <PodStat label={t("project.pod.podip")} value={pod.pod_ip || "—"} mono />
@@ -114,7 +116,7 @@ export function ProjectDetail() {
       )}
 
       <section className="mb-3 flex items-end justify-between">
-        <h2 className="text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">{t("project.recent")}</h2>
+        <h2 className="text-[12px] font-medium text-ink-muted">{t("project.recent")}</h2>
         <span className="text-[11.5px] text-ink-faint">{t("project.shown", { count: list.length })}</span>
       </section>
 
@@ -128,7 +130,7 @@ export function ProjectDetail() {
             <span
               dangerouslySetInnerHTML={{
                 __html: t("project.deployments.empty.description", {
-                  cmd: '<code class="font-mono text-ink-DEFAULT">deploy +push</code>',
+                  cmd: '<code class="font-mono text-ink">deploy +push</code>',
                 }),
               }}
             />
@@ -138,10 +140,10 @@ export function ProjectDetail() {
 
       {list.length > 0 && (
         <>
-          <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-surface">
+          <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-base">
             <table className="min-w-full text-[13px]">
-              <thead className="bg-canvas-base/40">
-                <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+              <thead className="bg-canvas-surface">
+                <tr className="text-left text-[12px] font-medium text-ink-muted">
                   <th className="px-5 py-3 font-medium">{t("project.deployments.col.id")}</th>
                   <th className="px-5 py-3 font-medium">{t("project.deployments.col.status")}</th>
                   <th className="px-5 py-3 font-medium">{t("project.deployments.col.trigger")}</th>
@@ -150,18 +152,18 @@ export function ProjectDetail() {
                   <th className="px-5 py-3 font-medium">{t("project.deployments.col.deployed")}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line-subtle/60">
+              <tbody className="divide-y divide-line-subtle">
                 {list.map((d) => (
                   <tr
                     key={d.id}
                     onClick={() => nav(`/projects/${slug}/deployments/${d.id}`)}
-                    className="group cursor-pointer hover:bg-canvas-raised/50 transition-colors"
+                    className="group cursor-pointer hover:bg-canvas-surface transition-colors"
                   >
                     <td className="px-5 py-3.5 font-mono text-[12px]">
                       <Link
                         to={`/projects/${slug}/deployments/${d.id}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="text-ink-DEFAULT group-hover:text-brand"
+                        className="text-ink group-hover:text-ink-strong hover:underline"
                       >
                         {shortID(d.id)}
                       </Link>
@@ -204,6 +206,16 @@ export function ProjectDetail() {
         <EnvPanel slug={slug} canEdit={canManage} />
       </div>
 
+      {/* Access control panel — withdrawn from the project page. Inbound policy
+          (SSO scope + IP allow-list) is no longer self-service: it is owned by
+          platform admins through 设置 → 访问预设, and PATCH /access and
+          PATCH /visibility both refuse changes server-side. Hiding the panel
+          alone would only move the same capability behind a raw API call, which
+          is why the backend is gated too.
+
+          Kept commented rather than deleted so re-enabling is a two-line
+          revert if the policy changes.
+
       <div className="mt-8">
         <ProjectAccessPanel
           slug={slug}
@@ -211,9 +223,6 @@ export function ProjectDetail() {
           initialCIDRs={p.allow_cidrs ?? []}
           visibility={p.visibility}
           canEdit={canManage}
-          // Only admins (or platform tokens) can edit the global preset
-          // list — mirror the backend permission so non-admins don't get a
-          // dead-link "Manage presets →".
           canManagePresets={
             who.data?.kind === "user"
               ? Boolean(who.data.admin)
@@ -221,6 +230,7 @@ export function ProjectDetail() {
           }
         />
       </div>
+      */}
 
       <div className="mt-8">
         <ProjectTLSPanel
@@ -291,7 +301,7 @@ function DangerZone({
             placeholder={slug}
             spellCheck={false}
             autoComplete="off"
-            className="w-full rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-status-fail-fg/30 focus:border-status-fail-fg"
+            className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-status-fail-fg/30 focus:border-status-fail-fg"
           />
         </div>
         <button
@@ -301,7 +311,7 @@ function DangerZone({
             "shrink-0 px-4 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
             armed && !del.isPending
               ? "bg-status-fail-fg text-canvas-base hover:opacity-90"
-              : "bg-canvas-raised text-ink-faint cursor-not-allowed",
+              : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
           )}
         >
           {del.isPending ? t("danger.delete.button.busy") : t("danger.delete.button")}
@@ -321,8 +331,8 @@ function DangerZone({
 function PodStat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10.5px] uppercase tracking-[0.12em] text-ink-faint font-medium mb-1">{label}</div>
-      <div className={`text-[12.5px] text-ink-DEFAULT truncate ${mono ? "font-mono" : ""}`} title={value}>
+      <div className="text-[12px] font-medium text-ink-muted mb-1">{label}</div>
+      <div className={`text-[12.5px] text-ink truncate ${mono ? "font-mono" : ""}`} title={value}>
         {value}
       </div>
     </div>

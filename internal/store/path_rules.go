@@ -16,10 +16,10 @@ import (
 // Lets the API layer translate to 409 without parsing pg error strings.
 var ErrPathRuleTaken = errors.New("a path rule with this prefix already exists for this project")
 
-const pathRuleCols = `id, project_id, path_prefix, mode, created_at, updated_at`
+const pathRuleCols = `id, project_id, path_prefix, mode, allow_cidrs, created_at, updated_at`
 
 func scanPathRule(row pgx.Row, r *model.ProjectPathRule) error {
-	return row.Scan(&r.ID, &r.ProjectID, &r.PathPrefix, &r.Mode, &r.CreatedAt, &r.UpdatedAt)
+	return row.Scan(&r.ID, &r.ProjectID, &r.PathPrefix, &r.Mode, &r.AllowCIDRs, &r.CreatedAt, &r.UpdatedAt)
 }
 
 func isPathRuleUniqueViolation(err error) bool {
@@ -55,12 +55,15 @@ func (s *Store) ListProjectPathRules(ctx context.Context, projectID uuid.UUID) (
 // with the same prefix already exists for this project — the UNIQUE constraint
 // keeps owners from accidentally double-defining a prefix with conflicting
 // modes.
-func (s *Store) CreateProjectPathRule(ctx context.Context, projectID uuid.UUID, pathPrefix, mode string) (*model.ProjectPathRule, error) {
-	q := `INSERT INTO project_path_rules (project_id, path_prefix, mode)
-	      VALUES ($1, $2, $3)
+func (s *Store) CreateProjectPathRule(ctx context.Context, projectID uuid.UUID, pathPrefix, mode string, allowCIDRs []string) (*model.ProjectPathRule, error) {
+	if allowCIDRs == nil {
+		allowCIDRs = []string{}
+	}
+	q := `INSERT INTO project_path_rules (project_id, path_prefix, mode, allow_cidrs)
+	      VALUES ($1, $2, $3, $4)
 	      RETURNING ` + pathRuleCols
 	var r model.ProjectPathRule
-	err := scanPathRule(s.Pool.QueryRow(ctx, q, projectID, pathPrefix, mode), &r)
+	err := scanPathRule(s.Pool.QueryRow(ctx, q, projectID, pathPrefix, mode, allowCIDRs), &r)
 	if err != nil {
 		if isPathRuleUniqueViolation(err) {
 			return nil, ErrPathRuleTaken
@@ -73,13 +76,16 @@ func (s *Store) CreateProjectPathRule(ctx context.Context, projectID uuid.UUID, 
 // UpdateProjectPathRule modifies an existing rule's mode (or prefix — rare,
 // but supported for typo fixes). The (project_id, id) compound check makes
 // owner-scoped tenant isolation explicit.
-func (s *Store) UpdateProjectPathRule(ctx context.Context, projectID, ruleID uuid.UUID, pathPrefix, mode string) (*model.ProjectPathRule, error) {
+func (s *Store) UpdateProjectPathRule(ctx context.Context, projectID, ruleID uuid.UUID, pathPrefix, mode string, allowCIDRs []string) (*model.ProjectPathRule, error) {
+	if allowCIDRs == nil {
+		allowCIDRs = []string{}
+	}
 	q := `UPDATE project_path_rules
-	         SET path_prefix = $3, mode = $4, updated_at = now()
+	         SET path_prefix = $3, mode = $4, allow_cidrs = $5, updated_at = now()
 	       WHERE id = $1 AND project_id = $2
 	   RETURNING ` + pathRuleCols
 	var r model.ProjectPathRule
-	err := scanPathRule(s.Pool.QueryRow(ctx, q, ruleID, projectID, pathPrefix, mode), &r)
+	err := scanPathRule(s.Pool.QueryRow(ctx, q, ruleID, projectID, pathPrefix, mode, allowCIDRs), &r)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

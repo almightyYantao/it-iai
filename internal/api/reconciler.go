@@ -38,6 +38,9 @@ func (r *Reconciler) Run(ctx context.Context) {
 	//   - healthTick (30s) re-checks live projects against the cluster so the
 	//     DB status doesn't drift (e.g. pod evicted, node drained, manual
 	//     kubectl scale --replicas=0)
+	if err := r.srv.syncPlatformAllowList(ctx); err != nil {
+		log.Printf("platform allow-list sync: %v", err)
+	}
 	go r.runHealthLoop(ctx)
 
 	t := time.NewTicker(r.interval)
@@ -73,11 +76,12 @@ func (r *Reconciler) runHealthLoop(ctx context.Context) {
 // writes to the DB, and only when the status actually changes.
 //
 // Rules:
-//   pod Ready  → status='running'  (bumps last_active_at via UpdateProjectStatus)
-//   not Ready  → status='stopped'  (no timestamp bump — we observed it down)
-//   probe err  → no-op             (likely "deployment not found" because the
-//                                   project was never successfully deployed;
-//                                   leave whatever 'created' or 'error' state)
+//
+//	pod Ready  → status='running'  (bumps last_active_at via UpdateProjectStatus)
+//	not Ready  → status='stopped'  (no timestamp bump — we observed it down)
+//	probe err  → no-op             (likely "deployment not found" because the
+//	                                project was never successfully deployed;
+//	                                leave whatever 'created' or 'error' state)
 func (r *Reconciler) reconcileProjectHealth(ctx context.Context) {
 	rows, err := r.srv.store.ListProjectsForHealthReconcile(ctx)
 	if err != nil {
@@ -121,11 +125,20 @@ type pendingDeploy struct {
 }
 
 func (r *Reconciler) tick(ctx context.Context) {
+	// The join on projects is load-bearing, not cosmetic: without it a
+	// deployment left in 'pushing'/'deploying' for a soft-deleted project gets
+	// picked up and re-applied, which recreates the namespace and (via the
+	// readiness path below) writes status='running' back onto a tombstoned row.
+	// That leaves a live workload the platform no longer manages — it is
+	// invisible to every list query, to reconcileProjectHealth, and to the
+	// startup ingress sweep, all of which filter deleted_at IS NULL.
 	const q = `
-		SELECT id, project_id, status, COALESCE(image_tag,''), manifest
-		FROM deployments
-		WHERE status IN ('pushing','deploying')
-		ORDER BY queued_at ASC
+		SELECT d.id, d.project_id, d.status, COALESCE(d.image_tag,''), d.manifest
+		FROM deployments d
+		JOIN projects p ON p.id = d.project_id
+		WHERE d.status IN ('pushing','deploying')
+		  AND p.deleted_at IS NULL
+		ORDER BY d.queued_at ASC
 		LIMIT 8
 	`
 	rows, err := r.srv.store.Pool.Query(ctx, q)
@@ -263,6 +276,16 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 			envs[k] = v
 		}
 
+		// Endpoint half of the project's egress allow-list. A failure here is not
+		// fatal: deploying with the platform's own services reachable but an
+		// admin-added destination missing is recoverable (re-save the rules),
+		// whereas failing the deploy would strand the project on its old image.
+		egressAllows, eaerr := r.srv.egressAllowsForProject(ctx, p.ProjectID)
+		if eaerr != nil {
+			_, _ = r.srv.store.AppendEvent(ctx, p.ID, "deploy", "warn",
+				"could not load egress allow-list, deploying without it: "+eaerr.Error())
+		}
+
 		_ = r.srv.store.MarkDeploymentStatus(ctx, p.ID, model.DeployDeploying, "")
 		_, _ = r.srv.store.AppendEvent(ctx, p.ID, "deploy", "info", "applying Kubernetes manifests")
 		r.srv.bus.Publish(p.ID)
@@ -275,6 +298,9 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 			CPU:    m.Resources.CPU,
 			Memory: m.Resources.Memory,
 			SQLite: m.Needs.SQLite,
+			// Admin-configured endpoint allow-list. Passed on every deploy so a
+			// redeploy can't silently drop rules an admin added since the last one.
+			EgressAllows: egressAllows,
 		}); err != nil {
 			r.fail(ctx, p.ID, "k8s_apply", err.Error())
 			return
@@ -360,8 +386,12 @@ func (r *Reconciler) fail(ctx context.Context, depID uuid.UUID, code, msg string
 	r.srv.bus.Publish(depID)
 }
 
+// slugFor resolves a project id to its slug. Filters deleted_at like every
+// other project read: a caller that gets ErrNoRows here fails its deployment
+// rather than deploying into a namespace for a project that no longer exists.
 func (r *Reconciler) slugFor(ctx context.Context, projectID uuid.UUID) (string, error) {
 	var slug string
-	err := r.srv.store.Pool.QueryRow(ctx, `SELECT slug FROM projects WHERE id = $1`, projectID).Scan(&slug)
+	err := r.srv.store.Pool.QueryRow(ctx,
+		`SELECT slug FROM projects WHERE id = $1 AND deleted_at IS NULL`, projectID).Scan(&slug)
 	return slug, err
 }

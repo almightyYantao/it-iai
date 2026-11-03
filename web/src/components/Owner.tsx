@@ -11,7 +11,7 @@ export function OwnerCell({ email }: { email?: string }) {
       <span className="size-5 rounded-full bg-canvas-raised border border-line-subtle flex items-center justify-center text-[10px] text-ink-muted">
         {initials}
       </span>
-      <span className="text-ink-DEFAULT truncate max-w-[180px]">{email}</span>
+      <span className="text-ink truncate max-w-[180px]">{email}</span>
     </span>
   );
 }

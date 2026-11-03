@@ -2,12 +2,16 @@ package k8sdriver
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"net"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	apierr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -47,16 +51,26 @@ var ingressRouteGVR = schema.GroupVersionResource{
 const apiTokenVerifyMiddlewareRef = "oauth2-proxy-iai-api-token-verify@kubernetescrd"
 
 type Deployer struct {
-	cs            *kubernetes.Clientset
-	dyn           dynamic.Interface // for Traefik Middleware CRs we don't import directly
-	baseDomain    string
-	ingressClass  string
+	// Interface rather than *Clientset so tests can inject a fake.
+	cs           kubernetes.Interface
+	dyn          dynamic.Interface // for Traefik Middleware CRs we don't import directly
+	baseDomain   string
+	ingressClass string
 	// Name of the cert-manager ClusterIssuer to attach to Ingresses that opt
 	// into TLS. Empty disables the annotation entirely — handy on dev clusters
 	// where cert-manager isn't installed yet.
 	tlsClusterIssuer string
 	// Image hostname rewritten when control plane refers to a different host than what k3d uses.
 	registryHostFromCluster string
+	// host:port pairs on the platform host that user pods legitimately need
+	// (their own Postgres / Redis / S3). Everything else on those hosts is
+	// denied by the per-project egress policy — see ensureEgressPolicy.
+	platformServiceEndpoints []string
+	// ClusterIP of kube-dns. Only used as a second way to name DNS in the egress
+	// policy; empty just drops that rule.
+	dnsClusterIP string
+	// Keep user pods off the platform's own node — see schedulingConstraints.
+	avoidControlPlaneNodes bool
 }
 
 type DeployerOpts struct {
@@ -65,6 +79,16 @@ type DeployerOpts struct {
 	IngressClass            string
 	TLSClusterIssuer        string
 	RegistryHostFromCluster string // e.g. "host.k3d.internal:5001"
+	// PlatformServiceEndpoints lists the "host:port" values pods are handed in
+	// DATABASE_URL / REDIS_URL / S3_ENDPOINT. Used to build the allow-list of
+	// the per-project egress NetworkPolicy; empty disables the policy.
+	PlatformServiceEndpoints []string
+	// DNSClusterIP is kube-dns's ClusterIP (k3s default 10.43.0.10). Named in the
+	// egress policy alongside the kube-dns pod selector; empty drops that rule.
+	DNSClusterIP string
+	// AvoidControlPlaneNodes keeps user pods off the node that runs the
+	// platform's own services. See schedulingConstraints for why that matters.
+	AvoidControlPlaneNodes bool
 }
 
 func New(opts DeployerOpts) (*Deployer, error) {
@@ -81,44 +105,59 @@ func New(opts DeployerOpts) (*Deployer, error) {
 		return nil, err
 	}
 	return &Deployer{
-		cs:                      cs,
-		dyn:                     dyn,
-		baseDomain:              opts.BaseDomain,
-		ingressClass:            opts.IngressClass,
-		tlsClusterIssuer:        opts.TLSClusterIssuer,
-		registryHostFromCluster: opts.RegistryHostFromCluster,
+		cs:                       cs,
+		dyn:                      dyn,
+		baseDomain:               opts.BaseDomain,
+		ingressClass:             opts.IngressClass,
+		tlsClusterIssuer:         opts.TLSClusterIssuer,
+		registryHostFromCluster:  opts.RegistryHostFromCluster,
+		platformServiceEndpoints: opts.PlatformServiceEndpoints,
+		dnsClusterIP:             opts.DNSClusterIP,
+		avoidControlPlaneNodes:   opts.AvoidControlPlaneNodes,
 	}, nil
 }
 
+// EgressAllow is one admin-approved destination for a project's pods, as far as
+// NetworkPolicy can express it: an address and a port. Hostname-based rules are
+// the egress proxy's job — ipBlock cannot match names.
+type EgressAllow struct {
+	CIDR string // canonical, e.g. "10.8.0.0/16" or "203.0.113.7/32"
+	Port int32
+}
+
 type ApplyInput struct {
-	Slug     string
-	Image    string            // <registry>/<slug>:<dep_id> as known to Build Service
-	Port     int
-	Env      map[string]string // user env + injected
-	CPU      string
-	Memory   string
+	Slug   string
+	Image  string // <registry>/<slug>:<dep_id> as known to Build Service
+	Port   int
+	Env    map[string]string // user env + injected
+	CPU    string
+	Memory string
 	// SQLite enables the Litestream pattern: emptyDir /data shared with a
 	// sidecar that continuously replicates /data/app.db to the project's
 	// S3 bucket. An init container restores from S3 on pod start. Requires
 	// the S3_* env vars to be set (caller enforces this — usually because
 	// Needs.S3 was true alongside Needs.SQLite).
 	SQLite bool
+	// EgressAllows are the project's admin-configured endpoint rules. Merged
+	// into the egress policy on top of the platform's own services.
+	EgressAllows []EgressAllow
 }
 
 // Litestream defaults — kept as package-level constants so the init / sidecar
 // container helpers and the env injection in the reconciler stay aligned.
 const (
-	litestreamImage    = "litestream/litestream:0.3.13"
-	sqliteVolumeName   = "sqlite-data"
-	sqliteMountPath    = "/data"
-	sqliteDefaultDB    = "/data/app.db"
-	sqliteS3ObjectKey  = "app.db" // path under the project's S3 bucket
+	litestreamImage   = "litestream/litestream:0.3.13"
+	sqliteVolumeName  = "sqlite-data"
+	sqliteMountPath   = "/data"
+	sqliteDefaultDB   = "/data/app.db"
+	sqliteS3ObjectKey = "app.db" // path under the project's S3 bucket
 )
 
 // litestreamScript builds a small shell snippet that:
-//   * generates a one-off config at /tmp/lc.yml from the S3_* env vars
+//   - generates a one-off config at /tmp/lc.yml from the S3_* env vars
 //     already present in the pod (injected from project_env)
-//   * exec's the supplied litestream subcommand
+//   - exec's the supplied litestream subcommand
+//
 // Inline config keeps us from having to manage a ConfigMap per project.
 func litestreamScript(subcommand string) string {
 	return `set -eu
@@ -163,10 +202,219 @@ func (d *Deployer) EnsureNamespace(ctx context.Context, slug string) error {
 	return err
 }
 
+const egressPolicyName = "iai-egress"
+
+// isPrivateOrLinkLocal reports whether an address is already covered by the
+// blanket private-range carve-out, so it doesn't need its own /32 entry.
+func isPrivateOrLinkLocal(ip net.IP) bool {
+	return ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback()
+}
+
+// ensureEgressPolicy pins down what a user pod may reach on the platform host.
+//
+// The problem it solves: everything the platform runs on that host — the image
+// registry (5001), the control-plane database (5432), the control-plane API
+// (8080) — is published on 0.0.0.0, so any workload could talk to it. A host
+// firewall can't fix that: pod traffic to a node address is masqueraded to that
+// node's IP before it arrives, so the registry cannot tell a pod from
+// containerd. Filtering has to happen at the pod's egress instead.
+//
+// NetworkPolicy is allow-list only, so "deny a few ports" is expressed as
+// "allow the internet except the platform hosts, then add those hosts back on
+// exactly the ports pods are handed in DATABASE_URL / REDIS_URL / S3_ENDPOINT".
+// Ports we never grant stay unreachable. Endpoints configured as hostnames
+// rather than IPs are skipped — ipBlock can't express DNS names, and leaving
+// them to the catch-all rule errs toward availability rather than breaking a
+// service we failed to parse.
+func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string, extra []EgressAllow) error {
+	if len(d.platformServiceEndpoints) == 0 {
+		return nil
+	}
+	// CIDR → ports reachable on it. Keyed by CIDR rather than bare host so the
+	// platform's own /32s and an admin's "10.8.0.0/16" live in one structure and
+	// a rule naming an address the platform already publishes just contributes a
+	// port instead of emitting a second, conflicting peer.
+	allowed := map[string]map[int32]struct{}{}
+	addPort := func(cidr string, port int32) {
+		if allowed[cidr] == nil {
+			allowed[cidr] = map[int32]struct{}{}
+		}
+		allowed[cidr][port] = struct{}{}
+	}
+	// Platform data services. 80/443 come along for free: projects reach each
+	// other (and the platform's own API) through Traefik by hostname.
+	for _, ep := range d.platformServiceEndpoints {
+		host, portStr, err := net.SplitHostPort(strings.TrimSpace(ep))
+		if err != nil || net.ParseIP(host) == nil {
+			continue
+		}
+		port, err := strconv.Atoi(portStr)
+		if err != nil || port < 1 || port > 65535 {
+			continue
+		}
+		addPort(host+"/32", 80)
+		addPort(host+"/32", 443)
+		addPort(host+"/32", int32(port))
+	}
+	// The registry is published on the platform's public address too, so that
+	// address has to reach the deny side even when no data service is configured
+	// there — otherwise pods just reach 5001 by the other IP. 80/443 only.
+	if host, _, err := net.SplitHostPort(strings.TrimSpace(d.registryHostFromCluster)); err == nil {
+		if ip := net.ParseIP(host); ip != nil && !ip.IsLoopback() && allowed[host+"/32"] == nil {
+			addPort(host+"/32", 80)
+			addPort(host+"/32", 443)
+		}
+	}
+	// Admin-approved per-project endpoint rules.
+	for _, e := range extra {
+		if e.Port < 1 || e.Port > 65535 {
+			continue
+		}
+		if _, _, err := net.ParseCIDR(e.CIDR); err != nil {
+			continue
+		}
+		addPort(e.CIDR, e.Port)
+	}
+	if len(allowed) == 0 {
+		return nil
+	}
+
+	cidrs := make([]string, 0, len(allowed))
+	for c := range allowed {
+		cidrs = append(cidrs, c)
+	}
+	sort.Strings(cidrs)
+
+	// Everything private is carved out of the catch-all and only handed back
+	// where a project demonstrably needs it:
+	//
+	//   10.42/16, 10.43/16  the pod and service networks. Cross-namespace pod
+	//                       traffic is how the 2026-07 payloads shipped harvested
+	//                       env to a collector running as another project, and how
+	//                       they scanned for reachable databases. Projects have no
+	//                       business dialling each other's pods — they talk over
+	//                       their hostnames through Traefik like any other client.
+	//   10/8, 172.16/12,    corporate internals. Reachable from a pod means one
+	//   192.168/16          compromised app is a foothold on the office network.
+	//   169.254/16          cloud instance metadata. Steals the node's IAM role in
+	//                       one HTTP GET; the attacker had a probe named for it.
+	//
+	// Public internet stays open here — it is closed separately once the egress
+	// proxy lands, because doing it in this rule would leave no way to allow the
+	// few destinations a project legitimately needs.
+	except := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"169.254.0.0/16",
+	}
+	for _, c := range cidrs {
+		ip, _, err := net.ParseCIDR(c)
+		if err == nil && !isPrivateOrLinkLocal(ip) {
+			// Public addresses aren't covered by the ranges above, so they need
+			// their own carve-out (the platform's public IP publishes the
+			// registry too).
+			except = append(except, c)
+		}
+	}
+	sort.Strings(except)
+	rules := []netv1.NetworkPolicyEgressRule{{
+		To: []netv1.NetworkPolicyPeer{{
+			IPBlock: &netv1.IPBlock{CIDR: "0.0.0.0/0", Except: except},
+		}},
+	}}
+	tcp := corev1.ProtocolTCP
+	udp := corev1.ProtocolUDP
+
+	// DNS. Named both ways on purpose: the pod selector is what the CNI matches
+	// when it evaluates the pre-DNAT destination, the ClusterIP covers the case
+	// where it sees the service address instead. Getting this wrong doesn't
+	// degrade gracefully — every lookup in every project fails.
+	dnsPort := intstr.FromInt(53)
+	rules = append(rules,
+		netv1.NetworkPolicyEgressRule{
+			To: []netv1.NetworkPolicyPeer{{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"kubernetes.io/metadata.name": "kube-system"},
+				},
+				PodSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{"k8s-app": "kube-dns"},
+				},
+			}},
+			Ports: []netv1.NetworkPolicyPort{
+				{Protocol: &udp, Port: &dnsPort},
+				{Protocol: &tcp, Port: &dnsPort},
+			},
+		},
+		// A project's own pods — multi-replica apps and sidecars talking to each
+		// other. podSelector with no namespaceSelector means "this namespace".
+		netv1.NetworkPolicyEgressRule{
+			To: []netv1.NetworkPolicyPeer{{PodSelector: &metav1.LabelSelector{}}},
+		},
+	)
+	if ip := net.ParseIP(d.dnsClusterIP); ip != nil {
+		rules = append(rules, netv1.NetworkPolicyEgressRule{
+			To:    []netv1.NetworkPolicyPeer{{IPBlock: &netv1.IPBlock{CIDR: d.dnsClusterIP + "/32"}}},
+			Ports: []netv1.NetworkPolicyPort{{Protocol: &udp, Port: &dnsPort}, {Protocol: &tcp, Port: &dnsPort}},
+		})
+	}
+	for _, c := range cidrs {
+		ports := make([]int32, 0, len(allowed[c]))
+		for p := range allowed[c] {
+			ports = append(ports, p)
+		}
+		sort.Slice(ports, func(i, j int) bool { return ports[i] < ports[j] })
+		peerPorts := make([]netv1.NetworkPolicyPort, 0, len(ports))
+		for _, p := range ports {
+			pp := intstr.FromInt(int(p))
+			peerPorts = append(peerPorts, netv1.NetworkPolicyPort{Protocol: &tcp, Port: &pp})
+		}
+		rules = append(rules, netv1.NetworkPolicyEgressRule{
+			To:    []netv1.NetworkPolicyPeer{{IPBlock: &netv1.IPBlock{CIDR: c}}},
+			Ports: peerPorts,
+		})
+	}
+
+	ns := d.namespaceFor(slug)
+	want := &netv1.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{Name: egressPolicyName, Namespace: ns, Labels: appLabels(slug)},
+		Spec: netv1.NetworkPolicySpec{
+			PodSelector: metav1.LabelSelector{},
+			PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeEgress},
+			Egress:      rules,
+		},
+	}
+	api := d.cs.NetworkingV1().NetworkPolicies(ns)
+	cur, err := api.Get(ctx, egressPolicyName, metav1.GetOptions{})
+	if apierr.IsNotFound(err) {
+		_, err = api.Create(ctx, want, metav1.CreateOptions{})
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	want.ResourceVersion = cur.ResourceVersion
+	_, err = api.Update(ctx, want, metav1.UpdateOptions{})
+	return err
+}
+
+// SyncEgressPolicy rewrites just the egress policy. Used when an admin edits the
+// allow-list: the workload itself hasn't changed, so re-applying the Deployment
+// (and restarting the pod) to pick up a policy edit would be gratuitous.
+func (d *Deployer) SyncEgressPolicy(ctx context.Context, slug string, allows []EgressAllow) error {
+	return d.ensureEgressPolicy(ctx, slug, allows)
+}
+
 // Apply creates or updates the Deployment, Service, Ingress, and Secret for a project.
 func (d *Deployer) Apply(ctx context.Context, in ApplyInput) error {
 	if err := d.EnsureNamespace(ctx, in.Slug); err != nil {
 		return err
+	}
+	// Reconciled on every deploy rather than only at namespace creation, so
+	// projects that predate the policy (or had it deleted by hand) get it back
+	// without an operator remembering to reapply it.
+	if err := d.ensureEgressPolicy(ctx, in.Slug, in.EgressAllows); err != nil {
+		return fmt.Errorf("egress policy: %w", err)
 	}
 	if err := d.applySecret(ctx, in); err != nil {
 		return err
@@ -228,6 +476,81 @@ func (d *Deployer) applySecret(ctx context.Context, in ApplyInput) error {
 	return err
 }
 
+// k3s labels its server nodes node-role.kubernetes.io/control-plane. Agents
+// carry no such label, so "anywhere but the platform node" can be expressed
+// without hand-labelling every agent — a newly joined agent is eligible the
+// moment it registers.
+const controlPlaneNodeLabel = "node-role.kubernetes.io/control-plane"
+
+// schedulingConstraints keeps user pods off the node that runs the platform's
+// own Postgres / Redis / MinIO.
+//
+// Pods reach those services through the platform host's address rather than a
+// Service — the host:port pairs in platformServiceEndpoints, which is also what
+// lands in DATABASE_URL / REDIS_URL / S3_ENDPOINT. From an agent that is an
+// ordinary connection to another machine. From a pod on the platform node the
+// destination is that node's own IP, and the connection is refused, so the pod
+// comes up with no database and no object storage. Nothing crashes: the app
+// starts, serves traffic, and fails every backing-service call. A SQLite
+// project is worse off still — litestream cannot reach the bucket to restore,
+// so the app starts on an empty file as if it were a fresh install.
+//
+// The constraint is required rather than preferred on purpose. Landing on the
+// platform node is a hard failure, so "prefer an agent but schedule here under
+// pressure" would reintroduce the bug exactly when the cluster is busiest.
+//
+// Single-node installs have no agent to fall back to, so the constraint is
+// dropped when no schedulable non-control-plane node exists — that mode is
+// documented as supported, and leaving every deploy Pending would be a worse
+// failure than the one being prevented.
+func (d *Deployer) schedulingConstraints(ctx context.Context) (*corev1.Affinity, error) {
+	if !d.avoidControlPlaneNodes {
+		return nil, nil
+	}
+	agents, err := d.hasSchedulableAgentNode(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !agents {
+		return nil, nil
+	}
+	return &corev1.Affinity{
+		NodeAffinity: &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+					MatchExpressions: []corev1.NodeSelectorRequirement{{
+						Key:      controlPlaneNodeLabel,
+						Operator: corev1.NodeSelectorOpDoesNotExist,
+					}},
+				}},
+			},
+		},
+	}, nil
+}
+
+// hasSchedulableAgentNode reports whether the cluster has at least one Ready,
+// non-cordoned node without the control-plane label — i.e. somewhere for a
+// user pod to go once the platform node is excluded.
+func (d *Deployer) hasSchedulableAgentNode(ctx context.Context) (bool, error) {
+	nodes, err := d.cs.CoreV1().Nodes().List(ctx, metav1.ListOptions{
+		LabelSelector: "!" + controlPlaneNodeLabel,
+	})
+	if err != nil {
+		return false, fmt.Errorf("list nodes: %w", err)
+	}
+	for _, n := range nodes.Items {
+		if n.Spec.Unschedulable {
+			continue
+		}
+		for _, c := range n.Status.Conditions {
+			if c.Type == corev1.NodeReady && c.Status == corev1.ConditionTrue {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 func (d *Deployer) applyDeployment(ctx context.Context, in ApplyInput) error {
 	ns := d.namespaceFor(in.Slug)
 	name := "app"
@@ -280,6 +603,12 @@ func (d *Deployer) applyDeployment(ctx context.Context, in ApplyInput) error {
 	podSpec := corev1.PodSpec{
 		Containers: []corev1.Container{appContainer},
 	}
+
+	affinity, err := d.schedulingConstraints(ctx)
+	if err != nil {
+		return fmt.Errorf("scheduling constraints: %w", err)
+	}
+	podSpec.Affinity = affinity
 
 	// SQLite + Litestream wiring. When the manifest says needs.sqlite, the
 	// pod gets:
@@ -430,6 +759,9 @@ type IngressHostsInput struct {
 type PathRule struct {
 	PathPrefix string
 	Mode       string
+	// AllowCIDRs, when non-empty, replaces the project allow-list for this
+	// prefix only (caller passes project list + extra external sources).
+	AllowCIDRs []string
 }
 
 // SyncIngressHostnames replaces the project's Ingress rules with one rule per
@@ -495,7 +827,7 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 		if err != nil && !apierr.IsNotFound(err) {
 			return fmt.Errorf("delete IngressRoute: %w", err)
 		}
-		return nil
+		return d.pruneRuleAllowLists(ctx, ns, slug, nil)
 	}
 
 	// Sort rules longest-prefix-first so traefik's explicit priority picks the
@@ -539,8 +871,17 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 	// hundreds) and decrement by prefix length so longer prefixes still win
 	// within the IngressRoute itself.
 	const basePriority = 100_000
+	wanted := map[string]bool{}
 	for i, rule := range ordered {
 		mws := append([]any(nil), baseMWs...)
+		if len(rule.AllowCIDRs) > 0 {
+			mwName := pathAllowListName(slug, rule.PathPrefix)
+			if err := d.upsertAllowList(ctx, ns, slug, mwName, rule.AllowCIDRs); err != nil {
+				return err
+			}
+			wanted[mwName] = true
+			mws = []any{map[string]any{"name": mwName, "namespace": ns}}
+		}
 		switch rule.Mode {
 		case "token":
 			// allow-list is in-project; api-token-verify is cluster-wide so we
@@ -564,6 +905,10 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 			}},
 			"middlewares": mws,
 		})
+	}
+
+	if err := d.pruneRuleAllowLists(ctx, ns, slug, wanted); err != nil {
+		return err
 	}
 
 	spec := map[string]any{
@@ -613,9 +958,12 @@ func (d *Deployer) syncPathRuleIngressRoute(ctx context.Context, slug string, ho
 // the same object rather than churning resources.
 func allowListMiddlewareName(slug string) string { return "iai-allowlist-" + slug }
 
+// denyAllCIDR is the allow-list used when a project resolves to no CIDRs.
+const denyAllCIDR = "127.0.0.1/32"
+
 // syncIPAllowList creates or updates an IPAllowList Traefik Middleware for the
 // project. Returns the Middleware name (empty when none should be attached).
-// An empty cidrs slice causes the Middleware to be deleted.
+// An empty cidrs slice pins it to denyAllCIDR (fail closed); it is never deleted.
 func (d *Deployer) syncIPAllowList(ctx context.Context, slug string, cidrs []string) (string, error) {
 	ns := d.namespaceFor(slug)
 	name := allowListMiddlewareName(slug)
@@ -636,12 +984,10 @@ func (d *Deployer) syncIPAllowList(ctx context.Context, slug string, cidrs []str
 	}
 
 	if len(clean) == 0 {
-		// Delete the Middleware so the Ingress goes back to "open access".
-		err := d.dyn.Resource(middlewareGVR).Namespace(ns).Delete(ctx, name, metav1.DeleteOptions{})
-		if err != nil && !apierr.IsNotFound(err) {
-			return "", fmt.Errorf("delete IPAllowList middleware: %w", err)
-		}
-		return "", nil
+		// Fail closed: an empty list used to delete the Middleware and leave
+		// the project open to any source. Now it pins the allow-list to
+		// loopback, which no external client can match.
+		clean = []string{denyAllCIDR}
 	}
 
 	cidrIface := make([]any, len(clean))
@@ -820,9 +1166,9 @@ func (d *Deployer) IsDeploymentReady(ctx context.Context, slug string) (bool, er
 //   - summary:        short human-readable state line, suitable for an event log.
 //   - ready:          true once at least one container has passed its readiness probe.
 //   - terminalReason: non-empty when the pod has reached a state that won't recover
-//                     without user intervention (ImagePullBackOff, CrashLoopBackOff,
-//                     InvalidImageName, ...). The reconciler should fail the
-//                     deployment with this reason instead of polling forever.
+//     without user intervention (ImagePullBackOff, CrashLoopBackOff,
+//     InvalidImageName, ...). The reconciler should fail the
+//     deployment with this reason instead of polling forever.
 func (d *Deployer) PodSummary(ctx context.Context, slug string) (summary string, ready bool, terminalReason string, err error) {
 	ns := d.namespaceFor(slug)
 	pods, err := d.cs.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: "app=" + slug})
@@ -911,10 +1257,10 @@ func (d *Deployer) PodSummary(ctx context.Context, slug string) (summary string,
 // Returned by GET /v1/projects/{slug} so the admin UI can show node assignment
 // without the operator having to SSH and run kubectl.
 type PodPlacement struct {
-	Node    string `json:"node"`            // node the pod is scheduled on
-	Pod     string `json:"pod"`             // pod name (useful for kubectl logs)
-	Phase   string `json:"phase"`           // "Running" / "Pending" / ...
-	Ready   bool   `json:"ready"`           // first container has passed readiness probe
+	Node    string `json:"node"`  // node the pod is scheduled on
+	Pod     string `json:"pod"`   // pod name (useful for kubectl logs)
+	Phase   string `json:"phase"` // "Running" / "Pending" / ...
+	Ready   bool   `json:"ready"` // first container has passed readiness probe
 	PodIP   string `json:"pod_ip,omitempty"`
 	HostIP  string `json:"host_ip,omitempty"`
 	Started string `json:"started,omitempty"` // RFC3339; empty if pod hasn't started yet
@@ -1081,4 +1427,88 @@ func (d *Deployer) DeleteProject(ctx context.Context, slug string) error {
 		return err
 	}
 	return nil
+}
+
+// pathAllowListName names the per-rule allow-list. Hash of the prefix keeps it
+// a valid DNS label whatever characters the prefix contains.
+func pathAllowListName(slug, prefix string) string {
+	h := sha256.Sum256([]byte(prefix))
+	return fmt.Sprintf("iai-allowlist-%s-p%x", slug, h[:4])
+}
+
+const ruleAllowListLabel = "iai.io/path-allowlist"
+
+// upsertAllowList writes a per-rule IPAllowList middleware.
+func (d *Deployer) upsertAllowList(ctx context.Context, ns, slug, name string, cidrs []string) error {
+	src := make([]any, 0, len(cidrs))
+	for _, c := range cidrs {
+		src = append(src, c)
+	}
+	labels := map[string]any{ruleAllowListLabel: "true"}
+	for k, v := range appLabels(slug) {
+		labels[k] = v
+	}
+	body := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "traefik.io/v1alpha1",
+		"kind":       "Middleware",
+		"metadata":   map[string]any{"name": name, "namespace": ns, "labels": labels},
+		"spec":       map[string]any{"ipAllowList": map[string]any{"sourceRange": src}},
+	}}
+	res := d.dyn.Resource(middlewareGVR).Namespace(ns)
+	cur, err := res.Get(ctx, name, metav1.GetOptions{})
+	if apierr.IsNotFound(err) {
+		_, err = res.Create(ctx, body, metav1.CreateOptions{})
+		return err
+	}
+	if err != nil {
+		return err
+	}
+	body.SetResourceVersion(cur.GetResourceVersion())
+	_, err = res.Update(ctx, body, metav1.UpdateOptions{})
+	return err
+}
+
+// pruneRuleAllowLists deletes per-rule allow-lists no longer referenced, so a
+// removed external source stops being admitted.
+func (d *Deployer) pruneRuleAllowLists(ctx context.Context, ns, slug string, keep map[string]bool) error {
+	res := d.dyn.Resource(middlewareGVR).Namespace(ns)
+	list, err := res.List(ctx, metav1.ListOptions{LabelSelector: ruleAllowListLabel + "=true"})
+	if err != nil {
+		if apierr.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("list path allow-lists: %w", err)
+	}
+	for _, it := range list.Items {
+		if keep[it.GetName()] {
+			continue
+		}
+		if err := res.Delete(ctx, it.GetName(), metav1.DeleteOptions{}); err != nil && !apierr.IsNotFound(err) {
+			return fmt.Errorf("delete path allow-list %s: %w", it.GetName(), err)
+		}
+	}
+	return nil
+}
+
+// Platform entrypoints (admin-ui, oauth2-proxy) aren't projects, so they share
+// one allow-list mirrored from the `internal` preset. Both Ingresses reference
+// it as kube-system-iai-internal-allowlist@kubernetescrd.
+const (
+	PlatformAllowListNamespace = "kube-system"
+	PlatformAllowListName      = "iai-internal-allowlist"
+)
+
+// SyncPlatformAllowList writes the platform allow-list. Empty pins it to
+// denyAllCIDR, same fail-closed rule as projects.
+func (d *Deployer) SyncPlatformAllowList(ctx context.Context, cidrs []string) error {
+	clean := []string{}
+	for _, c := range cidrs {
+		if c = strings.TrimSpace(c); c != "" {
+			clean = append(clean, c)
+		}
+	}
+	if len(clean) == 0 {
+		clean = []string{denyAllCIDR}
+	}
+	return d.upsertAllowList(ctx, PlatformAllowListNamespace, "platform", PlatformAllowListName, clean)
 }

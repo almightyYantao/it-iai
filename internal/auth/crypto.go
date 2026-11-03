@@ -42,20 +42,41 @@ func LoadKEK(b64 string) (*KEK, error) {
 	return &KEK{aead: gcm, key: dup}, nil
 }
 
-func (k *KEK) Encrypt(plaintext []byte) ([]byte, error) {
+// Encrypt seals plaintext under the KEK, binding the result to `aad`.
+//
+// `aad` is authenticated but not encrypted: Decrypt only succeeds when given
+// the identical value. Callers MUST pass the context the ciphertext belongs to
+// (see EnvAAD) so a blob cannot be lifted out of one row and replayed under
+// another. Passing nil is only legitimate in the KEK-rotation migration, which
+// has to read pre-AAD ciphertext.
+func (k *KEK) Encrypt(plaintext, aad []byte) ([]byte, error) {
 	nonce := make([]byte, k.aead.NonceSize())
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
 	}
-	return k.aead.Seal(nonce, nonce, plaintext, nil), nil
+	return k.aead.Seal(nonce, nonce, plaintext, aad), nil
 }
 
-func (k *KEK) Decrypt(ciphertext []byte) ([]byte, error) {
+// Decrypt opens a ciphertext produced by Encrypt. `aad` must match exactly what
+// was supplied at seal time, otherwise this fails — that mismatch is the whole
+// point: it is what stops a ciphertext from being moved between projects.
+func (k *KEK) Decrypt(ciphertext, aad []byte) ([]byte, error) {
 	ns := k.aead.NonceSize()
 	if len(ciphertext) < ns {
 		return nil, errors.New("ciphertext too short")
 	}
-	return k.aead.Open(nil, ciphertext[:ns], ciphertext[ns:], nil)
+	return k.aead.Open(nil, ciphertext[:ns], ciphertext[ns:], aad)
+}
+
+// EnvAAD is the canonical AAD for a project_env value, binding the ciphertext
+// to both the owning project and the key name.
+//
+// Without this binding an attacker with write access to project_env can copy
+// another project's encrypted value into a project they control and let the
+// platform decrypt it for them on the next deploy. Domain-separated by a fixed
+// prefix, NUL-delimited so ("a","bc") and ("ab","c") cannot collide.
+func EnvAAD(projectID, key string) []byte {
+	return []byte("project_env\x00" + projectID + "\x00" + key)
 }
 
 // Derive returns a 32-byte sub-key bound to a label. Used to keep auxiliary

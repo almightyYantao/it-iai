@@ -55,6 +55,8 @@ export interface ProjectPathRule {
   project_id: string;
   path_prefix: string;
   mode: "no_auth" | "token";
+  // External sources admitted for this prefix only (admin-set, token mode).
+  allow_cidrs: string[];
   created_at: string;
   updated_at: string;
 }
@@ -125,7 +127,8 @@ export interface AuditEntry {
   id: string;
   actor_type: string;
   actor_id: string;
-  actor_label: string; // email (user) or token name (token); falls back to actor_id
+  actor_label: string; // accountable identity: email when resolvable, else token name, else actor_id
+  actor_via?: string; // token the action came through, when that isn't already the label
   action: string;
   project_id?: string | null;
   metadata?: string;

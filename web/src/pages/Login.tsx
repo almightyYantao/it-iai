@@ -80,7 +80,7 @@ export function Login() {
               onClick={() => setLocale(lo)}
               className={
                 "px-1.5 py-0.5 rounded transition-colors " +
-                (locale === lo ? "bg-canvas-raised text-ink-strong" : "text-ink-faint hover:text-ink-DEFAULT")
+                (locale === lo ? "bg-canvas-raised text-ink-strong" : "text-ink-faint hover:text-ink")
               }
             >
               {lo === "zh" ? "中" : "EN"}
@@ -91,7 +91,7 @@ export function Login() {
         <div className="flex items-center gap-2 mb-1">
           <BrandMark className="size-5 text-brand" />
           <div className="font-semibold tracking-tight text-ink-strong text-[15px]">{t("app.name")}</div>
-          <span className="ml-1 text-[11px] uppercase tracking-[0.12em] text-ink-faint">deploy</span>
+          <span className="ml-1 text-[12px] text-ink-faint">deploy</span>
         </div>
         <p className="text-[13px] text-ink-muted mb-8">{t("app.tagline")}</p>
 
@@ -106,14 +106,14 @@ export function Login() {
               onChange={(e) => setTok(e.target.value)}
               placeholder="vbd_live_..."
               autoFocus
-              className="w-full h-10 rounded-md bg-canvas-surface border border-line px-3 font-mono text-[13px] placeholder-ink-faint text-ink-DEFAULT focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand-ring transition"
+              className="w-full h-10 rounded-md bg-canvas-surface border border-line px-3 font-mono text-[13px] placeholder-ink-faint text-ink focus:outline-none focus:border-line-strong focus:ring-[3px] focus:ring-ink-strong/10 transition"
             />
           </div>
 
           <button
             type="submit"
             disabled={busy || !token.trim()}
-            className="w-full h-10 rounded-md bg-brand hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed text-canvas-base text-[13px] font-semibold transition"
+            className="w-full h-10 rounded-md bg-brand hover:bg-brand-hover disabled:bg-canvas-raised disabled:text-ink-muted disabled:border disabled:border-line disabled:cursor-not-allowed text-canvas-base text-[13px] font-semibold transition"
           >
             {busy ? t("login.button.continue.busy") : t("login.button.continue")}
           </button>
@@ -125,7 +125,7 @@ export function Login() {
                   <div className="w-full border-t border-line-subtle" />
                 </div>
                 <div className="relative flex justify-center">
-                  <span className="px-2 bg-canvas-base text-[11px] uppercase tracking-[0.12em] text-ink-faint">{t("login.or")}</span>
+                  <span className="px-2 bg-canvas-base text-[12px] text-ink-faint">{t("login.or")}</span>
                 </div>
               </div>
               <button

@@ -20,14 +20,36 @@ import (
 // no restriction — preferable to accidentally locking out an app because the
 // DB blipped.
 func (s *Server) effectiveAllowCIDRs(ctx context.Context, p *model.Project) []string {
-	if p.AccessPreset == nil || *p.AccessPreset == "" {
-		return p.AllowCIDRs
+	// Ingress is reachable from the internet once the security group opens
+	// 443, so this list is the only network gate. Fail closed: the retired
+	// `public` preset, an unresolvable preset and world-open CIDRs all fall
+	// back to `internal`; nothing here can widen access to everyone.
+	//
+	var base []string
+	if p.AccessPreset != nil && *p.AccessPreset != "" && *p.AccessPreset != "public" {
+		if pr, err := s.store.GetCIDRPreset(ctx, *p.AccessPreset); err == nil && pr != nil {
+			base = pr.CIDRs
+		}
 	}
-	pr, err := s.store.GetCIDRPreset(ctx, *p.AccessPreset)
-	if err != nil || pr == nil {
-		return nil
+	if len(base) == 0 || hasWorldCIDR(base) {
+		base = nil
+		if pr, err := s.store.GetCIDRPreset(ctx, "internal"); err == nil && pr != nil && !hasWorldCIDR(pr.CIDRs) {
+			base = pr.CIDRs
+		}
 	}
-	return pr.CIDRs
+	return base // empty → deployer installs a deny-all allow-list
+}
+
+// hasWorldCIDR reports whether any entry opens the allow-list to everyone.
+func hasWorldCIDR(cidrs []string) bool {
+	for _, c := range cidrs {
+		if _, n, err := net.ParseCIDR(strings.TrimSpace(c)); err == nil {
+			if ones, _ := n.Mask.Size(); ones == 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // normaliseCIDR validates a single CIDR or bare IP and returns the canonical
@@ -127,47 +149,82 @@ func (s *Server) syncIngressForProject(ctx context.Context, p *model.Project) er
 	// "public" means literally no auth gate — everyone on the network can hit
 	// the URL. "org" and "restricted" both go behind oauth2-proxy; "restricted"
 	// further requires a collaborator entry, but that's app-level, not L7.
-	requireAuth := p.Visibility != model.VisibilityPublic
+	requireAuth := true // `public` visibility is retired; internal ingress always sits behind SSO
 
 	// Path-prefix overrides ride on a separate IngressRoute. Best-effort: a
 	// failure to load rules shouldn't strand the ingress sync — log via the
 	// audit channel and proceed with no rules (which keeps the project's
 	// default visibility in force, the safe fallback).
+	allow := s.effectiveAllowCIDRs(ctx, p)
 	var pathRules []k8sdriver.PathRule
 	if rules, err := s.store.ListProjectPathRules(ctx, p.ID); err == nil {
 		for _, r := range rules {
-			pathRules = append(pathRules, k8sdriver.PathRule{
-				PathPrefix: r.PathPrefix,
-				Mode:       r.Mode,
-			})
+			pr := k8sdriver.PathRule{PathPrefix: r.PathPrefix, Mode: r.Mode}
+			// External sources widen this prefix only: project allow-list +
+			// the rule's own CIDRs (world-open entries never pass).
+			if len(r.AllowCIDRs) > 0 {
+				pr.AllowCIDRs = append([]string(nil), allow...)
+				for _, c := range r.AllowCIDRs {
+					if !hasWorldCIDR([]string{c}) {
+						pr.AllowCIDRs = append(pr.AllowCIDRs, c)
+					}
+				}
+			}
+			pathRules = append(pathRules, pr)
 		}
 	}
 
 	return s.deployer.SyncIngressHostnames(ctx, k8sdriver.IngressHostsInput{
 		Slug:        p.Slug,
 		Hostnames:   hostnames,
-		AllowCIDRs:  s.effectiveAllowCIDRs(ctx, p),
+		AllowCIDRs:  allow,
 		RequireAuth: requireAuth,
 		TLSEnabled:  p.TLSEnabled,
 		PathRules:   pathRules,
 	})
 }
 
+// accessPolicySelfService gates whether a project owner may change their own
+// inbound access policy (SSO scope + IP allow-list).
+//
+// Turned off: the access-control panel was withdrawn from the project page, and
+// hiding UI alone would just move the same capability behind a raw API call.
+// Inbound policy is now owned centrally — admins maintain the named CIDR presets
+// (PUT /v1/admin/cidr-presets/{name}), which re-syncs every project bound to
+// them, and new projects default to the `internal` preset.
+//
+// Flip to true to restore self-service; the handler bodies are untouched.
+const accessPolicySelfService = false
+
+func accessPolicyFrozen(w http.ResponseWriter, what string) {
+	writeError(w, http.StatusForbidden, "access_policy_frozen",
+		"per-project "+what+" can no longer be changed through the API — "+
+			"inbound access policy is maintained by platform admins via the global CIDR presets")
+}
+
 // PATCH /v1/projects/:slug/access
 //
 // Body: one of
-//   { "preset": "internal" }                      // switch to preset mode
-//   { "preset": null, "allow_cidrs": [...] }      // switch to custom mode
+//
+//	{ "preset": "internal" }                      // switch to preset mode
+//	{ "preset": null, "allow_cidrs": [...] }      // switch to custom mode
 //
 // Sending only `allow_cidrs` (legacy clients) is also accepted — preset is
 // cleared and the project goes into custom mode automatically. Empty
 // `allow_cidrs` in custom mode means "no IP restriction".
 //
-// Only the project owner or an admin may change this — collaborators
-// explicitly cannot, because access policy is not a development concern.
+// Frozen — see accessPolicySelfService. When self-service was on, only the
+// project owner or an admin could change this; collaborators explicitly could
+// not, because access policy is not a development concern.
 func (s *Server) handlePatchProjectAccess(w http.ResponseWriter, r *http.Request) {
 	p := projectFrom(r.Context())
 	actor, _ := ActorFrom(r.Context())
+	// Owners lost self-service; platform admins edit per-project allow-lists
+	// from the settings page.
+	if !accessPolicySelfService && !isAdminActor(actor) {
+		accessPolicyFrozen(w, "IP allow-list / access preset")
+		return
+	}
 	if !s.canManageProject(actor, p) {
 		writeError(w, http.StatusForbidden, "not_authorised", "only the project owner or an admin can change access policy")
 		return
@@ -385,18 +442,28 @@ func (s *Server) handlePatchProjectTLS(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /v1/projects/:slug/visibility
 //
-// Body: { "visibility": "org" | "restricted" | "public" }
+// Body: { "visibility": "org" | "restricted" }
 //
 // Switches the SSO gating mode for the project:
 //
 //   - org        traffic must carry a valid Longbridge OIDC cookie (any
-//                Keycloak-issued user passes).
+//     Keycloak-issued user passes).
 //   - restricted same as org plus an app-level collaborator check.
-//   - public     no auth at all — anyone on the network reaches the app.
+//
+// "public" (no auth gate at all) is no longer selectable — the platform is
+// internal-access-only. To let a specific machine caller through without SSO,
+// use a per-project API token plus a path rule instead of opening the whole
+// app; see handleCreatePathRule.
 //
 // Owner or admin only. Triggers an immediate ingress re-sync so the
 // ForwardAuth middleware is added or removed without waiting for a redeploy.
 func (s *Server) handlePatchProjectVisibility(w http.ResponseWriter, r *http.Request) {
+	// Visibility (the SSO scope) was rendered in the same withdrawn panel, so it
+	// is frozen alongside the allow-list — see accessPolicySelfService.
+	if !accessPolicySelfService {
+		accessPolicyFrozen(w, "visibility")
+		return
+	}
 	p := projectFrom(r.Context())
 	actor, _ := ActorFrom(r.Context())
 	if !s.canManageProject(actor, p) {
@@ -413,9 +480,16 @@ func (s *Server) handlePatchProjectVisibility(w http.ResponseWriter, r *http.Req
 	}
 	v := model.Visibility(body.Visibility)
 	switch v {
-	case model.VisibilityOrg, model.VisibilityRestricted, model.VisibilityPublic:
+	case model.VisibilityOrg, model.VisibilityRestricted:
+	case model.VisibilityPublic:
+		// Deliberately a distinct message: callers that used to send "public"
+		// should know it was withdrawn on purpose, not that they typo'd.
+		writeError(w, http.StatusBadRequest, "visibility_public_withdrawn",
+			"public visibility is no longer available — the platform is internal-access-only. "+
+				"Use a project API token + path rule to exempt a specific machine caller.")
+		return
 	default:
-		writeError(w, http.StatusBadRequest, "bad_visibility", "visibility must be one of: org, restricted, public")
+		writeError(w, http.StatusBadRequest, "bad_visibility", "visibility must be one of: org, restricted")
 		return
 	}
 

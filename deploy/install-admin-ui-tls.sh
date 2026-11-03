@@ -168,6 +168,9 @@ metadata:
     # Both entrypoints — Traefik's HelmChartConfig redirects web→websecure,
     # so this just gives the redirect something to match on for HTTP.
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+    # Mirrored from the `internal` preset by control-plane. Must exist before
+    # this applies, or Traefik drops the router (404) — fail closed.
+    traefik.ingress.kubernetes.io/router.middlewares: kube-system-iai-internal-allowlist@kubernetescrd
 ${CERT_LINE}
 spec:
   rules:

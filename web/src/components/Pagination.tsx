@@ -35,7 +35,7 @@ export function Pagination({
   if (total === 0) return null;
 
   return (
-    <div className="flex items-center justify-between gap-4 mt-3 text-[12.5px] text-ink-muted">
+    <div className="flex items-center justify-between gap-4 mt-4 text-[13px] text-ink-muted">
       <div className="tabular-nums">
         {from}{from === to ? "" : "–" + to} / {total}
       </div>
@@ -43,16 +43,16 @@ export function Pagination({
         <select
           value={pageSize}
           onChange={(e) => setPageSize(Number(e.target.value))}
-          className="rounded-md border border-line bg-canvas-surface px-2 py-1 text-[12px] text-ink-DEFAULT"
+          className="h-8 rounded-md border border-line bg-canvas-base px-2 text-[13px] text-ink focus:outline-none focus:border-line-strong"
         >
           {pageSizeOptions.map((n) => (
             <option key={n} value={n}>{n} / {t("pagination.perpage")}</option>
           ))}
         </select>
-        <div className="inline-flex rounded-md border border-line-subtle bg-canvas-surface">
+        <div className="inline-flex h-8 items-center overflow-hidden rounded-md border border-line bg-canvas-base divide-x divide-line">
           <PageBtn disabled={page <= 1} onClick={() => setPage(1)}>«</PageBtn>
           <PageBtn disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</PageBtn>
-          <span className="px-3 py-1 text-[12.5px] text-ink-DEFAULT tabular-nums select-none">
+          <span className="px-3 text-[13px] text-ink-strong tabular-nums select-none">
             {page} / {pages}
           </span>
           <PageBtn disabled={page >= pages} onClick={() => setPage(page + 1)}>›</PageBtn>
@@ -77,10 +77,10 @@ function PageBtn({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "px-2 py-1 text-[12.5px] transition-colors first:rounded-l-md last:rounded-r-md",
+        "flex h-full w-8 items-center justify-center text-[14px] transition-colors",
         disabled
           ? "text-ink-faint cursor-not-allowed"
-          : "text-ink-muted hover:text-ink-DEFAULT hover:bg-canvas-raised/60",
+          : "text-ink-muted hover:text-ink-strong hover:bg-canvas-surface",
       )}
     >
       {children}

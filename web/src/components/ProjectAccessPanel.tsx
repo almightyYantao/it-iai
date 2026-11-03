@@ -101,11 +101,15 @@ export function ProjectAccessPanel({
     onError: (err) => setOpError(err instanceof ApiError ? err.message : String(err)),
   });
 
-  // Visibility is a single-dropdown setting with a much higher blast radius
-  // than a CIDR list (switching to "public" removes SSO entirely). Save
-  // immediately on change so the change is obvious, but show inline feedback.
+  // Visibility is a single-dropdown setting with a higher blast radius than a
+  // CIDR list, so save immediately on change and show inline feedback.
+  //
+  // "public" was withdrawn — the platform is internal-access-only. It can still
+  // arrive from the server on pre-existing rows, which is why the type below
+  // stays wide enough to render one (see the legacy <option>), but it can no
+  // longer be selected.
   const saveVisibility = useMutation({
-    mutationFn: (next: "org" | "restricted" | "public") =>
+    mutationFn: (next: "org" | "restricted") =>
       api.setProjectVisibility(slug, next),
     onSuccess: () => {
       setOpError(null);
@@ -122,7 +126,7 @@ export function ProjectAccessPanel({
   }
 
   return (
-    <section className="rounded-lg border border-line-subtle bg-canvas-surface">
+    <section className="rounded-lg border border-line-subtle bg-canvas-base">
       <header className="flex items-start justify-between gap-4 px-5 py-4 border-b border-line-subtle/60">
         <div>
           <h3 className="text-[14px] font-semibold text-ink-strong">{t("access.title")}</h3>
@@ -131,8 +135,8 @@ export function ProjectAccessPanel({
         <div className="flex items-center gap-2 shrink-0">
           <span
             className={cn(
-              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tracking-wide uppercase",
-              requiresLogin ? "bg-brand/12 text-brand" : "bg-canvas-raised text-ink-muted",
+              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+              requiresLogin ? "bg-canvas-raised text-ink-strong" : "bg-canvas-raised text-ink-muted",
             )}
             title={requiresLogin ? t("access.auth.required.hint") : t("access.auth.open.hint")}
           >
@@ -140,7 +144,7 @@ export function ProjectAccessPanel({
           </span>
           <span
             className={cn(
-              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tracking-wide uppercase",
+              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
               open ? "bg-canvas-raised text-ink-muted" : "bg-status-ok-bg/60 text-status-ok-fg",
             )}
             title={open ? t("access.state.open.hint") : t("access.state.restricted.hint")}
@@ -156,23 +160,31 @@ export function ProjectAccessPanel({
             redundant noise and (b) the change is high-impact enough that
             users should see the result without an extra click. */}
         <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-x-6 gap-y-1.5">
-          <label className="pt-1.5 text-[12.5px] font-medium text-ink-DEFAULT">
+          <label className="pt-1.5 text-[12.5px] font-medium text-ink">
             {t("access.visibility.label")}
           </label>
           <div>
             <select
               value={visibility}
-              onChange={(e) => saveVisibility.mutate(e.target.value as "org" | "restricted" | "public")}
+              onChange={(e) => saveVisibility.mutate(e.target.value as "org" | "restricted")}
               disabled={!canEdit || saveVisibility.isPending}
-              className="w-full rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] text-ink-strong focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand disabled:opacity-60"
+              className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] text-ink-strong focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong disabled:opacity-100 disabled:bg-canvas-raised disabled:text-ink-muted disabled:cursor-not-allowed"
             >
               <option value="org">{t("access.visibility.org")}</option>
               <option value="restricted">{t("access.visibility.restricted")}</option>
-              <option value="public">{t("access.visibility.public")}</option>
+              {/* Withdrawn option. Rendered only when a pre-existing row still
+                  carries it, so the dropdown reflects reality instead of
+                  silently displaying the wrong mode; disabled so it is a
+                  one-way exit. */}
+              {visibility === "public" && (
+                <option value="public" disabled>
+                  {t("access.visibility.public.legacy")}
+                </option>
+              )}
             </select>
             <p className="mt-1.5 text-[11.5px] text-ink-faint leading-relaxed">
               {visibility === "public"
-                ? t("access.visibility.public.hint")
+                ? t("access.visibility.public.legacy.hint")
                 : visibility === "restricted"
                   ? t("access.visibility.restricted.hint")
                   : t("access.visibility.org.hint")}
@@ -182,7 +194,7 @@ export function ProjectAccessPanel({
 
         {/* CIDR mode selector */}
         <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-x-6 gap-y-1.5">
-          <label className="pt-1.5 text-[12.5px] font-medium text-ink-DEFAULT">
+          <label className="pt-1.5 text-[12.5px] font-medium text-ink">
             {t("access.mode.label")}
           </label>
           <div>
@@ -190,7 +202,7 @@ export function ProjectAccessPanel({
               value={mode}
               onChange={(e) => setMode(e.target.value)}
               disabled={!canEdit || save.isPending}
-              className="w-full rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] text-ink-strong focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand disabled:opacity-60"
+              className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] text-ink-strong focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong disabled:opacity-100 disabled:bg-canvas-raised disabled:text-ink-muted disabled:cursor-not-allowed"
             >
               {presets.map((p) => (
                 <option key={p.name} value={p.name}>
@@ -245,7 +257,7 @@ export function ProjectAccessPanel({
               {dirty && (
                 <button
                   onClick={reset}
-                  className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink-DEFAULT transition-colors"
+                  className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink transition-colors"
                 >
                   {t("access.button.reset")}
                 </button>
@@ -256,8 +268,8 @@ export function ProjectAccessPanel({
                 className={cn(
                   "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
                   dirty && !save.isPending
-                    ? "bg-ink-strong text-canvas-base hover:bg-ink-DEFAULT"
-                    : "bg-canvas-raised text-ink-faint cursor-not-allowed",
+                    ? "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
+                    : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
                 )}
               >
                 {save.isPending ? t("access.button.save.busy") : t("access.button.save")}
@@ -287,7 +299,7 @@ function PresetModeBody({
   }
   return (
     <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-x-6 gap-y-1.5">
-      <div className="pt-1.5 text-[12.5px] font-medium text-ink-DEFAULT">
+      <div className="pt-1.5 text-[12.5px] font-medium text-ink">
         {t("access.preset.list.label")}
       </div>
       <div>
@@ -298,10 +310,10 @@ function PresetModeBody({
           <div className="text-[12px] text-ink-faint italic">{t("access.preset.empty.cidrs")}</div>
         ) : (
           <div className="rounded-md border border-line bg-canvas-base">
-            <div className="px-3 pt-2 pb-1 text-[10.5px] uppercase tracking-wide text-ink-faint">
+            <div className="px-3 pt-2 pb-1 text-[12px] text-ink-faint">
               {t("presets.cidrs.count", { n: String(preset.cidrs.length) })}
             </div>
-            <div className="px-3 pb-2 max-h-48 overflow-y-auto font-mono text-[12.5px] text-ink-DEFAULT space-y-0.5">
+            <div className="px-3 pb-2 max-h-48 overflow-y-auto font-mono text-[12.5px] text-ink space-y-0.5">
               {preset.cidrs.map((c) => (
                 <div key={c}>{c}</div>
               ))}
@@ -334,7 +346,7 @@ function CustomModeBody({
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-x-6 gap-y-1.5">
-      <div className="pt-1.5 text-[12.5px] font-medium text-ink-DEFAULT">
+      <div className="pt-1.5 text-[12.5px] font-medium text-ink">
         {t("access.preset.list.label")}
       </div>
       <div>
@@ -346,8 +358,8 @@ function CustomModeBody({
           rows={6}
           placeholder={t("access.custom.placeholder")}
           className={cn(
-            "w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[12.5px] font-mono text-ink-strong placeholder:text-ink-faint",
-            "focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand",
+            "w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint",
+            "focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong",
             disabled && "opacity-60 cursor-not-allowed",
           )}
         />

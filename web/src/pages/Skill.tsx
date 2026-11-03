@@ -95,8 +95,8 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
       {/* Quickstart: one-liner installer. Surfaced above the long-form tutorial
           because most users just want the happy path — the manual steps remain
           underneath for anyone who needs to understand what the installer does. */}
-      <section className="mb-10 rounded-lg border border-brand/30 bg-brand/5 px-6 py-5">
-        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-brand font-semibold mb-2">
+      <section className="mb-10 rounded-lg border border-ink-strong/30 bg-canvas-surface px-6 py-5">
+        <div className="flex items-center gap-2 text-[12px] text-brand font-semibold mb-2">
           <SparklesIcon className="size-3.5" />
           {t("skill.quickstart.label")}
         </div>
@@ -112,12 +112,12 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
       </section>
 
       {/* Prereqs */}
-      <section className="mb-12 rounded-lg border border-line-subtle bg-canvas-surface px-6 py-5">
-        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium mb-3">
+      <section className="mb-12 rounded-lg border border-line-subtle bg-canvas-base px-6 py-5">
+        <div className="flex items-center gap-2 text-[12px] font-medium text-ink-muted mb-3">
           <SparklesIcon className="size-3.5" />
           {t("skill.prereq.title")}
         </div>
-        <ul className="space-y-2 text-[13.5px] text-ink-DEFAULT">
+        <ul className="space-y-2 text-[13.5px] text-ink">
           <PrereqItem>{t("skill.prereq.claude")}</PrereqItem>
           <PrereqItem>{t("skill.prereq.deps")}</PrereqItem>
           <PrereqItem>{t("skill.prereq.repo")}</PrereqItem>
@@ -141,7 +141,7 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
         <div>
           <h3 className="text-[13.5px] font-medium text-ink-strong mb-1">{t("skill.step1.link.title")}</h3>
           <p className="text-[12.5px] text-ink-muted mb-3">{t("skill.step1.link.intro")}</p>
-          <div className="rounded-lg border border-line-subtle bg-canvas-surface overflow-hidden mb-4">
+          <div className="rounded-lg border border-line-subtle bg-canvas-base overflow-hidden mb-4">
             <div className="flex border-b border-line-subtle">
               {tabMeta.map((m) => (
                 <button
@@ -149,7 +149,7 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
                   onClick={() => setTab(m.value)}
                   className={cn(
                     "flex-1 px-5 py-3 text-left text-[13px] transition-colors border-r border-line-subtle last:border-r-0",
-                    tab === m.value ? "bg-canvas-base text-ink-strong" : "text-ink-muted hover:text-ink-DEFAULT",
+                    tab === m.value ? "bg-canvas-base text-ink-strong" : "text-ink-muted hover:text-ink",
                   )}
                 >
                   <div className="flex items-center gap-2 mb-0.5">
@@ -170,7 +170,7 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
           </div>
 
           <div className="mt-5">
-            <div className="text-[12px] uppercase tracking-[0.12em] text-ink-faint font-medium mb-2">
+            <div className="text-[12px] text-ink-faint font-medium mb-2">
               {t("skill.step1.verify.title")}
             </div>
             <p className="text-[12.5px] text-ink-muted mb-2">{t("skill.step1.verify.desc")}</p>
@@ -185,48 +185,48 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
 
         {/* Live shell block with show/hide + copy */}
         <div className="rounded-lg border border-line-subtle bg-canvas-inset overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-line-subtle/70 bg-canvas-base/40">
-            <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-line-subtle/70 bg-canvas-surface">
+            <div className="text-[12px] font-medium text-ink-muted">
               ~/.zshrc · ~/.bashrc
             </div>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setRevealToken((v) => !v)}
-                className="text-[11.5px] text-ink-faint hover:text-ink-DEFAULT transition-colors"
+                className="text-[11.5px] text-ink-faint hover:text-ink transition-colors"
               >
                 {revealToken ? t("skill.step2.hide") : t("skill.step2.reveal")}
               </button>
               <button
                 onClick={() => copy("shell")}
                 disabled={!token}
-                className="inline-flex items-center gap-1 text-[11.5px] text-ink-faint hover:text-ink-DEFAULT transition disabled:opacity-50"
+                className="inline-flex items-center gap-1 text-[11.5px] text-ink-faint hover:text-ink transition disabled:opacity-50"
               >
                 {copied === "shell" ? <CheckIcon className="size-3" /> : <ClipboardIcon className="size-3" />}
                 {copied === "shell" ? t("skill.step2.copied") : t("skill.step2.copy")}
               </button>
             </div>
           </div>
-          <pre className="px-4 py-3 font-mono text-[12.5px] leading-[1.7] text-ink-DEFAULT overflow-x-auto selection:bg-brand/30">
+          <pre className="px-4 py-3 font-mono text-[12.5px] leading-[1.7] text-ink overflow-x-auto selection:bg-brand/30">
             <code>{shellSnippet}</code>
           </pre>
         </div>
 
         <div className="mt-5">
-          <div className="text-[12px] uppercase tracking-[0.12em] text-ink-faint font-medium mb-2">
+          <div className="text-[12px] text-ink-faint font-medium mb-2">
             {t("skill.step2.verify.title")}
           </div>
           <p className="text-[12.5px] text-ink-muted mb-2">{t("skill.step2.verify.desc")}</p>
           <div className="rounded-lg border border-line-subtle bg-canvas-inset overflow-hidden">
-            <div className="flex items-center justify-end px-4 py-2 border-b border-line-subtle/70 bg-canvas-base/40">
+            <div className="flex items-center justify-end px-4 py-2 border-b border-line-subtle/70 bg-canvas-surface">
               <button
                 onClick={() => copy("verify")}
-                className="inline-flex items-center gap-1 text-[11.5px] text-ink-faint hover:text-ink-DEFAULT transition"
+                className="inline-flex items-center gap-1 text-[11.5px] text-ink-faint hover:text-ink transition"
               >
                 {copied === "verify" ? <CheckIcon className="size-3" /> : <ClipboardIcon className="size-3" />}
                 {copied === "verify" ? t("skill.step2.copied") : t("skill.step2.copy")}
               </button>
             </div>
-            <pre className="px-4 py-3 font-mono text-[12.5px] leading-[1.7] text-ink-DEFAULT overflow-x-auto selection:bg-brand/30">
+            <pre className="px-4 py-3 font-mono text-[12.5px] leading-[1.7] text-ink overflow-x-auto selection:bg-brand/30">
               <code>{verifyCmd}</code>
             </pre>
           </div>
@@ -239,7 +239,7 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
       <Step label={t("skill.step3.label")} title={t("skill.step3.title")}>
         <p className="text-[13.5px] text-ink-muted leading-relaxed mb-4">{t("skill.step3.intro")}</p>
 
-        <div className="rounded-lg border border-line-subtle bg-canvas-surface p-2 space-y-1">
+        <div className="rounded-lg border border-line-subtle bg-canvas-base p-2 space-y-1">
           {[
             t("skill.step3.example1"),
             t("skill.step3.example2"),
@@ -253,7 +253,7 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
               className="flex items-start gap-3 px-3 py-2 rounded-md hover:bg-canvas-raised/40"
             >
               <TerminalIcon className="size-3.5 mt-0.5 shrink-0 text-ink-faint" />
-              <span className="text-[13.5px] text-ink-DEFAULT">{line}</span>
+              <span className="text-[13.5px] text-ink">{line}</span>
             </div>
           ))}
         </div>
@@ -264,15 +264,15 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
         <h2 className="text-[15px] font-semibold text-ink-strong mb-1">{t("skill.commands.title")}</h2>
         <p className="text-[13px] text-ink-muted mb-4">{t("skill.commands.intro")}</p>
 
-        <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-surface">
+        <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-base">
           <table className="min-w-full text-[13px]">
-            <thead className="bg-canvas-base/40">
-              <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+            <thead className="bg-canvas-surface">
+              <tr className="text-left text-[12px] font-medium text-ink-muted">
                 <th className="px-5 py-3 font-medium w-[28%]">{t("skill.commands.col.cmd")}</th>
                 <th className="px-5 py-3 font-medium">{t("skill.commands.col.desc")}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line-subtle/60">
+            <tbody className="divide-y divide-line-subtle">
               <CmdRow cmd="deploy +push" desc={t("skill.commands.row.push")} />
               <CmdRow cmd="deploy +status" desc={t("skill.commands.row.status")} />
               <CmdRow cmd="deploy +logs [-f]" desc={t("skill.commands.row.logs")} />
@@ -320,9 +320,9 @@ redis = false`}
       </section>
 
       {/* CTA */}
-      <section className="rounded-lg border border-brand/40 bg-status-flight-bg/30 px-6 py-5">
+      <section className="rounded-lg border border-line-strong bg-status-flight-bg/30 px-6 py-5">
         <h2 className="text-[15px] font-semibold text-ink-strong mb-1">{t("skill.cta.title")} →</h2>
-        <p className="text-[13.5px] text-ink-DEFAULT">{t("skill.cta.body")}</p>
+        <p className="text-[13.5px] text-ink">{t("skill.cta.body")}</p>
         <div className="mt-3 flex items-center gap-3">
           <Link
             to="/projects"
@@ -340,7 +340,7 @@ function Step({ label, title, children }: { label: string; title: string; childr
   return (
     <section className="mb-12 grid grid-cols-[auto_1fr] gap-x-6">
       <div className="pt-0.5">
-        <div className="rounded-full bg-canvas-raised text-[11px] uppercase tracking-[0.12em] text-ink-muted font-medium px-2.5 py-1 inline-flex items-center">
+        <div className="rounded-full bg-canvas-raised text-[12px] text-ink-muted font-medium px-2.5 py-1 inline-flex items-center">
           {label}
         </div>
       </div>

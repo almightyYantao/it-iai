@@ -10,6 +10,7 @@ export function SkillBridge() {
   const token = getToken() ?? "";
   const apiBase = `${window.location.protocol}//${window.location.host}`;
   const [reveal, setReveal] = useState(false);
+  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<"cmd" | "tok" | "fail" | null>(null);
 
   const cmd = `export VIBEDEPLOY_API=${apiBase}\nexport VIBEDEPLOY_TOKEN=${token}`;
@@ -24,15 +25,21 @@ export function SkillBridge() {
   const masked = token.slice(0, 12) + "…";
 
   return (
-    <div className="mt-4 rounded-md border border-line-subtle bg-canvas-surface px-3 py-2.5">
+    <div className="relative">
+      <button onClick={() => setOpen((v) => !v)}
+        className="rounded-md border border-line-subtle px-2.5 py-1 text-[12px] font-medium text-ink-muted hover:border-line hover:text-ink-strong transition-colors">
+        CLI
+      </button>
+      {open && (
+    <div className="absolute right-0 top-9 z-50 w-80 rounded-lg border border-line-subtle bg-canvas-base px-3 py-2.5 shadow-raised animate-fade-in">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+        <div className="text-[12px] text-ink-strong font-medium">
           {t("bridge.heading")}
         </div>
         <button
           type="button"
           onClick={() => setReveal((v) => !v)}
-          className="text-[11px] text-ink-faint hover:text-ink-DEFAULT transition-colors"
+          className="text-[11px] text-ink-faint hover:text-ink transition-colors"
         >
           {reveal ? t("bridge.hide") : t("bridge.show")}
         </button>
@@ -44,7 +51,7 @@ export function SkillBridge() {
         <button
           onClick={() => copy("cmd")}
           className={cn(
-            "flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-line bg-canvas-base hover:bg-canvas-raised px-2 py-1 text-[11.5px] text-ink-DEFAULT transition",
+            "flex-1 inline-flex items-center justify-center gap-1.5 rounded-md border border-line bg-canvas-base hover:bg-canvas-raised px-2 py-1 text-[11.5px] text-ink transition",
           )}
           title={t("bridge.copyfull")}
         >
@@ -53,12 +60,14 @@ export function SkillBridge() {
         </button>
         <button
           onClick={() => copy("tok")}
-          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-line bg-canvas-base hover:bg-canvas-raised px-2 py-1 text-[11.5px] text-ink-muted hover:text-ink-DEFAULT transition"
+          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-line bg-canvas-base hover:bg-canvas-raised px-2 py-1 text-[11.5px] text-ink-muted hover:text-ink transition"
           title={t("bridge.copytoken")}
         >
           {copied === "tok" ? <CheckIcon className="size-3" /> : <ClipboardIcon className="size-3" />}
         </button>
       </div>
+    </div>
+      )}
     </div>
   );
 }
