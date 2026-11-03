@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { Alert, Badge, Button, Card, CardBody, CardFooter, CardHeader, Checkbox } from "./ui";
 
 // Per-project HTTPS opt-in. Off by default; flipping it on annotates the
 // Ingress with the configured cert-manager ClusterIssuer (see
@@ -44,40 +45,27 @@ export function ProjectTLSPanel({
   });
 
   return (
-    <section className="rounded-lg border border-line-subtle bg-canvas-base">
-      <header className="flex items-start justify-between gap-4 px-5 py-4 border-b border-line-subtle/60">
-        <div>
-          <h3 className="text-[14px] font-semibold text-ink-strong">{t("tls.title")}</h3>
-          <p className="mt-1 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">
-            {t("tls.desc")}
-          </p>
-        </div>
-        <span
-          className={cn(
-            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0",
-            initialEnabled
-              ? "bg-status-ok-bg/60 text-status-ok-fg"
-              : "bg-canvas-raised text-ink-muted",
-          )}
-        >
-          {initialEnabled ? t("tls.state.on") : t("tls.state.off")}
-        </span>
-      </header>
+    <Card>
+      <CardHeader
+        title={t("tls.title")}
+        description={t("tls.desc")}
+        actions={
+          <Badge variant={initialEnabled ? "success" : "default"}>
+            {initialEnabled ? t("tls.state.on") : t("tls.state.off")}
+          </Badge>
+        }
+      />
 
-      <div className="px-5 py-4 space-y-3">
+      <CardBody className="space-y-3">
         <label
           className={cn(
             "flex items-start gap-3 text-[13px] text-ink-strong select-none",
             !canEdit && "opacity-60 cursor-not-allowed",
           )}
         >
-          <input
-            type="checkbox"
-            checked={enabled}
-            disabled={!canEdit || save.isPending}
-            onChange={(e) => setEnabled(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-line accent-brand"
-          />
+          <span className="mt-0.5">
+            <Checkbox checked={enabled} disabled={!canEdit || save.isPending} onCheckedChange={setEnabled} />
+          </span>
           <span>{t("tls.label.enabled")}</span>
         </label>
 
@@ -85,42 +73,26 @@ export function ProjectTLSPanel({
           {enabled ? t("tls.hint.on") : t("tls.hint.off")}
         </p>
 
-        {opError && (
-          <div className="rounded-md border border-status-fail-fg/30 bg-status-fail-bg/40 text-status-fail-fg text-[12px] px-3 py-2">
-            {opError}
-          </div>
-        )}
+        {opError && <Alert variant="danger">{opError}</Alert>}
+      </CardBody>
 
-        {canEdit && (
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <div className="text-[11.5px] text-ink-faint">
-              {savedFlash && <span className="text-status-ok-fg">{t("tls.toast.saved")}</span>}
-            </div>
-            <div className="flex items-center gap-2">
-              {dirty && (
-                <button
-                  onClick={() => setEnabled(initialEnabled)}
-                  className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink transition-colors"
-                >
-                  {t("access.button.reset")}
-                </button>
-              )}
-              <button
-                onClick={() => save.mutate()}
-                disabled={!dirty || save.isPending}
-                className={cn(
-                  "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
-                  dirty && !save.isPending
-                    ? "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
-                    : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
-                )}
-              >
-                {save.isPending ? t("access.button.save.busy") : t("access.button.save")}
-              </button>
-            </div>
+      {canEdit && (
+        <CardFooter className="justify-between gap-3">
+          <div className="text-[11.5px] text-ink-faint">
+            {savedFlash && <span className="text-status-ok-fg">{t("tls.toast.saved")}</span>}
           </div>
-        )}
-      </div>
-    </section>
+          <div className="flex items-center gap-2">
+            {dirty && (
+              <Button variant="ghost" onClick={() => setEnabled(initialEnabled)}>
+                {t("access.button.reset")}
+              </Button>
+            )}
+            <Button onClick={() => save.mutate()} disabled={!dirty || save.isPending}>
+              {save.isPending ? t("access.button.save.busy") : t("access.button.save")}
+            </Button>
+          </div>
+        </CardFooter>
+      )}
+    </Card>
   );
 }

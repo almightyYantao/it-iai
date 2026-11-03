@@ -274,11 +274,11 @@ func (s *Server) syncEgressForProject(ctx context.Context, p *model.Project) err
 	if s.deployer == nil {
 		return nil
 	}
-	allows, err := s.egressAllowsForProject(ctx, p.ID)
+	allows, enforce, _, err := s.egressConfigForProject(ctx, p.ID)
 	if err != nil {
 		return err
 	}
-	return s.deployer.SyncEgressPolicy(ctx, p.Slug, allows)
+	return s.deployer.SyncEgressPolicy(ctx, p.Slug, allows, enforce)
 }
 
 // platformProtectedIPs lists the addresses whose reserved ports an egress rule
@@ -311,4 +311,34 @@ func (s *Server) platformProtectedIPs() []net.IP {
 		out = append(out, ip)
 	}
 	return out
+}
+
+// proxyHost is the address pods reach the hostNetwork egress proxy on — the
+// platform node, same as the user Postgres host.
+func (s *Server) proxyHost() string {
+	h := strings.TrimSpace(s.cfg.UserPGPublicHost)
+	if hh, _, err := net.SplitHostPort(h); err == nil {
+		h = hh
+	}
+	return h
+}
+
+// egressConfigForProject resolves everything the deployer needs for egress:
+// endpoint allows (plus the proxy listener when one is allocated), whether the
+// public catch-all is dropped, and the proxy URL to inject (empty when off).
+func (s *Server) egressConfigForProject(ctx context.Context, projectID uuid.UUID) ([]k8sdriver.EgressAllow, bool, string, error) {
+	allows, err := s.egressAllowsForProject(ctx, projectID)
+	if err != nil {
+		return nil, false, "", err
+	}
+	mode, port, err := s.store.GetProjectEgressMode(ctx, projectID)
+	if err != nil {
+		return allows, false, "", err
+	}
+	host := s.proxyHost()
+	if mode == "off" || port == 0 || net.ParseIP(host) == nil {
+		return allows, false, "", nil
+	}
+	allows = append(allows, k8sdriver.EgressAllow{CIDR: host + "/32", Port: int32(port)})
+	return allows, mode == "enforce", "http://" + net.JoinHostPort(host, strconv.Itoa(port)), nil
 }

@@ -1,3 +1,6 @@
+import { Toaster } from "sonner";
+import { ConfirmProvider } from "./components/ui/confirm";
+import { TooltipProvider } from "./components/ui/tooltip";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -23,7 +26,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <BrandedI18nProvider>
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>
-            <App />
+            <TooltipProvider>
+              <ConfirmProvider>
+                <App />
+                <Toaster position="bottom-center" toastOptions={{ className: "!rounded-md !border !border-line-subtle !bg-canvas-base !text-ink-strong !text-[13px] !shadow-raised" }} />
+              </ConfirmProvider>
+            </TooltipProvider>
           </BrowserRouter>
         </QueryClientProvider>
       </BrandedI18nProvider>

@@ -10,6 +10,9 @@ import { Audit } from "./pages/Audit";
 import { Users } from "./pages/Users";
 import { Skill } from "./pages/Skill";
 import { Settings } from "./pages/Settings";
+import { Presets } from "./pages/Presets";
+import { Access } from "./pages/Access";
+import { EgressLogs } from "./pages/EgressLogs";
 import { getToken } from "./lib/api";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -39,6 +42,9 @@ export function App() {
         <Route path="audit" element={<Audit />} />
         <Route path="users" element={<Users />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="presets" element={<Presets />} />
+        <Route path="access" element={<Access />} />
+        <Route path="egress-logs" element={<EgressLogs />} />
         <Route path="skill" element={<Skill />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

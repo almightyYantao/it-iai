@@ -1,9 +1,9 @@
+import { Alert, Badge, Button, Card, CardBody, CardHeader, Input, Select, confirmDialog } from "./ui";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
-import { cn } from "../lib/cn";
 import type { ProjectPathRule } from "../lib/types";
 
 // ProjectAPIAccessPanel — manages the project's API-level escape hatches:
@@ -97,17 +97,10 @@ export function ProjectAPIAccessPanel({
   }
 
   return (
-    <section className="rounded-lg border border-line-subtle bg-canvas-base">
-      <header className="flex items-start justify-between gap-4 px-5 py-4 border-b border-line-subtle/60">
-        <div>
-          <h3 className="text-[14px] font-semibold text-ink-strong">{t("apiAccess.title")}</h3>
-          <p className="mt-1 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">
-            {t("apiAccess.desc")}
-          </p>
-        </div>
-      </header>
+    <Card>
+      <CardHeader title={t("apiAccess.title")} description={t("apiAccess.desc")} />
 
-      <div className="px-5 py-4 space-y-5">
+      <CardBody className="space-y-5">
         {/* ----- Token section ------------------------------------------- */}
         <div>
           <div className="text-[12.5px] font-medium text-ink mb-2">
@@ -127,24 +120,27 @@ export function ProjectAPIAccessPanel({
               </span>
               {canEdit && (
                 <>
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="ml-auto"
                     onClick={() => regenerate.mutate()}
                     disabled={regenerate.isPending}
-                    className="ml-auto px-2.5 py-1 rounded-md text-[12px] border border-line text-ink hover:bg-canvas-raised disabled:opacity-100 disabled:bg-canvas-raised disabled:text-ink-muted disabled:cursor-not-allowed"
                   >
                     {regenerate.isPending ? t("apiAccess.token.btn.regen.busy") : t("apiAccess.token.btn.regen")}
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (window.confirm(t("apiAccess.token.confirmRevoke"))) {
+                  </Button>
+                  <Button
+                    variant="destructive-ghost"
+                    size="sm"
+                    onClick={async () => {
+                      if (await confirmDialog({ title: t("apiAccess.token.confirmRevoke"), danger: true })) {
                         revoke.mutate();
                       }
                     }}
                     disabled={revoke.isPending}
-                    className="px-2.5 py-1 rounded-md text-[12px] border border-line text-status-fail-fg hover:bg-status-fail-bg/40 disabled:opacity-100 disabled:bg-canvas-raised disabled:text-ink-muted disabled:cursor-not-allowed"
                   >
                     {revoke.isPending ? t("apiAccess.token.btn.revoke.busy") : t("apiAccess.token.btn.revoke")}
-                  </button>
+                  </Button>
                 </>
               )}
             </div>
@@ -152,13 +148,9 @@ export function ProjectAPIAccessPanel({
             <div className="flex items-center gap-3 text-[12.5px]">
               <span className="text-ink-faint">{t("apiAccess.token.none")}</span>
               {canEdit && (
-                <button
-                  onClick={() => regenerate.mutate()}
-                  disabled={regenerate.isPending}
-                  className="ml-auto px-2.5 py-1 rounded-md text-[12px] bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium disabled:opacity-100 disabled:bg-canvas-raised disabled:text-ink-muted disabled:cursor-not-allowed"
-                >
+                <Button size="sm" className="ml-auto" onClick={() => regenerate.mutate()} disabled={regenerate.isPending}>
                   {regenerate.isPending ? t("apiAccess.token.btn.create.busy") : t("apiAccess.token.btn.create")}
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -170,9 +162,7 @@ export function ProjectAPIAccessPanel({
             {t("apiAccess.rules.label")}
           </div>
           {tokenModeWithoutToken && (
-            <div className="mb-2 rounded-md border border-status-warn-fg/30 bg-status-warn-bg/30 text-status-warn-fg text-[12px] px-3 py-2">
-              {t("apiAccess.rules.warn.tokenButNoSecret")}
-            </div>
+            <Alert variant="warning" className="mb-2">{t("apiAccess.rules.warn.tokenButNoSecret")}</Alert>
           )}
           {rulesQ.isLoading && (
             <div className="text-[12.5px] text-ink-faint">{t("apiAccess.rules.loading")}</div>
@@ -185,24 +175,19 @@ export function ProjectAPIAccessPanel({
               {rules.map((r) => (
                 <li key={r.id} className="flex items-center gap-3 px-3 py-2 text-[12.5px]">
                   <code className="font-mono text-ink-strong">{r.path_prefix}</code>
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-medium",
-                      r.mode === "no_auth"
-                        ? "bg-canvas-raised text-ink-muted"
-                        : "bg-canvas-raised text-ink-strong",
-                    )}
-                  >
+                  <Badge variant={r.mode === "no_auth" ? "default" : "info"}>
                     {r.mode === "no_auth" ? t("apiAccess.rules.mode.no_auth") : t("apiAccess.rules.mode.token")}
-                  </span>
+                  </Badge>
                   {canEdit && (
-                    <button
+                    <Button
+                      variant="destructive-ghost"
+                      size="sm"
+                      className="ml-auto"
                       onClick={() => deleteRule.mutate(r.id)}
                       disabled={deleteRule.isPending}
-                      className="ml-auto text-[11.5px] text-ink-faint hover:text-status-fail-fg transition-colors"
                     >
                       {t("apiAccess.rules.btn.delete")}
-                    </button>
+                    </Button>
                   )}
                 </li>
               ))}
@@ -211,43 +196,24 @@ export function ProjectAPIAccessPanel({
 
           {canEdit && (
             <div className="mt-3 flex items-center gap-2">
-              <input
+              <Input
                 type="text"
                 value={newPrefix}
                 onChange={(e) => setNewPrefix(e.target.value)}
                 placeholder={t("apiAccess.rules.input.placeholder")}
-                className="flex-1 min-w-0 rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
+                className="flex-1 min-w-0 font-mono"
               />
-              <select
-                value={newMode}
-                onChange={(e) => setNewMode(e.target.value as "no_auth" | "token")}
-                className="rounded-md border border-line bg-canvas-base px-2 py-1.5 text-[13px] text-ink-strong focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
-              >
-                <option value="no_auth">{t("apiAccess.rules.mode.no_auth")}</option>
-                <option value="token">{t("apiAccess.rules.mode.token")}</option>
-              </select>
-              <button
-                onClick={() => createRule.mutate()}
-                disabled={createRule.isPending || !newPrefix.trim()}
-                className={cn(
-                  "px-3 py-1.5 rounded-md text-[12.5px] font-medium transition-colors shrink-0",
-                  createRule.isPending || !newPrefix.trim()
-                    ? "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed"
-                    : "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium",
-                )}
-              >
+              <Select className="w-40" value={newMode} onChange={setNewMode}
+                options={[{ value: "no_auth", label: t("apiAccess.rules.mode.no_auth") }, { value: "token", label: t("apiAccess.rules.mode.token") }]} />
+              <Button className="h-9" onClick={() => createRule.mutate()} disabled={createRule.isPending || !newPrefix.trim()}>
                 {createRule.isPending ? t("apiAccess.rules.btn.add.busy") : t("apiAccess.rules.btn.add")}
-              </button>
+              </Button>
             </div>
           )}
         </div>
 
-        {opError && (
-          <div className="rounded-md border border-status-fail-fg/30 bg-status-fail-bg/40 text-status-fail-fg text-[12px] px-3 py-2">
-            {opError}
-          </div>
-        )}
-      </div>
+        {opError && <Alert variant="danger">{opError}</Alert>}
+      </CardBody>
 
       {/* Reveal modal — shown exactly once when a new token is minted */}
       {revealed && (
@@ -257,7 +223,7 @@ export function ProjectAPIAccessPanel({
           onClose={() => setRevealed(null)}
         />
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -300,21 +266,16 @@ function RevealModal({
             {token}
           </code>
           <div className="flex items-center justify-end gap-2">
-            <button
+            <Button
+              variant="secondary"
               onClick={() => {
                 onCopy();
                 setCopied(true);
               }}
-              className="px-3 py-1.5 rounded-md text-[12.5px] border border-line text-ink hover:bg-canvas-raised"
             >
               {copied ? t("apiAccess.reveal.copied") : t("apiAccess.reveal.copy")}
-            </button>
-            <button
-              onClick={onClose}
-              className="px-3 py-1.5 rounded-md text-[12.5px] bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
-            >
-              {t("apiAccess.reveal.close")}
-            </button>
+            </Button>
+            <Button onClick={onClose}>{t("apiAccess.reveal.close")}</Button>
           </div>
         </div>
       </div>

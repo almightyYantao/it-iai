@@ -1,10 +1,10 @@
+import { Alert, Badge, Button, Card, CardBody, CardFooter, CardHeader, Label, Select, Textarea } from "./ui";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
-import { cn } from "../lib/cn";
 import type { CIDRPreset } from "../lib/types";
 
 // Sentinel for "custom mode" in the dropdown. Empty string would collide
@@ -126,62 +126,43 @@ export function ProjectAccessPanel({
   }
 
   return (
-    <section className="rounded-lg border border-line-subtle bg-canvas-base">
-      <header className="flex items-start justify-between gap-4 px-5 py-4 border-b border-line-subtle/60">
-        <div>
-          <h3 className="text-[14px] font-semibold text-ink-strong">{t("access.title")}</h3>
-          <p className="mt-1 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">{t("access.desc")}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span
-            className={cn(
-              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
-              requiresLogin ? "bg-canvas-raised text-ink-strong" : "bg-canvas-raised text-ink-muted",
-            )}
-            title={requiresLogin ? t("access.auth.required.hint") : t("access.auth.open.hint")}
-          >
-            {requiresLogin ? t("access.auth.required") : t("access.auth.open")}
-          </span>
-          <span
-            className={cn(
-              "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
-              open ? "bg-canvas-raised text-ink-muted" : "bg-status-ok-bg/60 text-status-ok-fg",
-            )}
-            title={open ? t("access.state.open.hint") : t("access.state.restricted.hint")}
-          >
-            {open ? t("access.state.open") : t("access.state.restricted")}
-          </span>
-        </div>
-      </header>
+    <Card>
+      <CardHeader
+        title={t("access.title")}
+        description={t("access.desc")}
+        actions={
+          <>
+            <Badge
+              variant={requiresLogin ? "solid" : "default"}
+              title={requiresLogin ? t("access.auth.required.hint") : t("access.auth.open.hint")}
+            >
+              {requiresLogin ? t("access.auth.required") : t("access.auth.open")}
+            </Badge>
+            <Badge
+              variant={open ? "default" : "success"}
+              title={open ? t("access.state.open.hint") : t("access.state.restricted.hint")}
+            >
+              {open ? t("access.state.open") : t("access.state.restricted")}
+            </Badge>
+          </>
+        }
+      />
 
-      <div className="px-5 py-4 space-y-4">
+      <CardBody className="space-y-4">
         {/* Visibility selector — controls Longbridge SSO gating. Saved immediately
             on change because (a) it's a single dropdown so a Save button is
             redundant noise and (b) the change is high-impact enough that
             users should see the result without an extra click. */}
         <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-x-6 gap-y-1.5">
-          <label className="pt-1.5 text-[12.5px] font-medium text-ink">
-            {t("access.visibility.label")}
-          </label>
+          <Label className="pt-1.5 text-[12.5px]">{t("access.visibility.label")}</Label>
           <div>
-            <select
-              value={visibility}
-              onChange={(e) => saveVisibility.mutate(e.target.value as "org" | "restricted")}
-              disabled={!canEdit || saveVisibility.isPending}
-              className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] text-ink-strong focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong disabled:opacity-100 disabled:bg-canvas-raised disabled:text-ink-muted disabled:cursor-not-allowed"
-            >
-              <option value="org">{t("access.visibility.org")}</option>
-              <option value="restricted">{t("access.visibility.restricted")}</option>
-              {/* Withdrawn option. Rendered only when a pre-existing row still
-                  carries it, so the dropdown reflects reality instead of
-                  silently displaying the wrong mode; disabled so it is a
-                  one-way exit. */}
-              {visibility === "public" && (
-                <option value="public" disabled>
-                  {t("access.visibility.public.legacy")}
-                </option>
-              )}
-            </select>
+            <Select value={visibility} disabled={!canEdit || saveVisibility.isPending}
+              onChange={(v) => v !== "public" && saveVisibility.mutate(v as "org" | "restricted")}
+              options={[
+                { value: "org", label: t("access.visibility.org") },
+                { value: "restricted", label: t("access.visibility.restricted") },
+                ...(visibility === "public" ? [{ value: "public", label: t("access.visibility.public.legacy") }] : []),
+              ]} />
             <p className="mt-1.5 text-[11.5px] text-ink-faint leading-relaxed">
               {visibility === "public"
                 ? t("access.visibility.public.legacy.hint")
@@ -194,28 +175,14 @@ export function ProjectAccessPanel({
 
         {/* CIDR mode selector */}
         <div className="grid grid-cols-1 md:grid-cols-[160px_1fr] gap-x-6 gap-y-1.5">
-          <label className="pt-1.5 text-[12.5px] font-medium text-ink">
-            {t("access.mode.label")}
-          </label>
+          <Label className="pt-1.5 text-[12.5px]">{t("access.mode.label")}</Label>
           <div>
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value)}
-              disabled={!canEdit || save.isPending}
-              className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] text-ink-strong focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong disabled:opacity-100 disabled:bg-canvas-raised disabled:text-ink-muted disabled:cursor-not-allowed"
-            >
-              {presets.map((p) => (
-                <option key={p.name} value={p.name}>
-                  {p.label}
-                </option>
-              ))}
-              {/* If the project points at a preset that the current viewer
-                  can't list (403 on /admin/cidr-presets), still show it. */}
-              {!isCustom && initialPreset && !presetByName.has(initialPreset) && (
-                <option value={initialPreset}>{initialPreset}</option>
-              )}
-              <option value={CUSTOM}>{t("access.mode.custom")}</option>
-            </select>
+            <Select value={mode} disabled={!canEdit || save.isPending} onChange={setMode}
+              options={[
+                ...presets.map((p) => ({ value: p.name, label: p.label })),
+                ...(!isCustom && initialPreset && !presetByName.has(initialPreset) ? [{ value: initialPreset, label: initialPreset }] : []),
+                { value: CUSTOM, label: t("access.mode.custom") },
+              ]} />
           </div>
         </div>
 
@@ -235,50 +202,34 @@ export function ProjectAccessPanel({
           />
         )}
 
-        {opError && (
-          <div className="rounded-md border border-status-fail-fg/30 bg-status-fail-bg/40 text-status-fail-fg text-[12px] px-3 py-2">
-            {opError}
-          </div>
-        )}
+        {opError && <Alert variant="danger">{opError}</Alert>}
+      </CardBody>
 
-        {canEdit && (
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <div className="text-[11.5px] text-ink-faint">
-              {open
-                ? isCustom
-                  ? t("access.count.none")
-                  : t("access.count.none.preset")
-                : t("access.count.n", { n: String(effectiveCIDRs.length) })}
-              {savedFlash && (
-                <span className="ml-3 text-status-ok-fg">{t("access.toast.saved")}</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {dirty && (
-                <button
-                  onClick={reset}
-                  className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink transition-colors"
-                >
-                  {t("access.button.reset")}
-                </button>
-              )}
-              <button
-                onClick={() => save.mutate()}
-                disabled={!dirty || save.isPending}
-                className={cn(
-                  "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
-                  dirty && !save.isPending
-                    ? "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
-                    : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
-                )}
-              >
-                {save.isPending ? t("access.button.save.busy") : t("access.button.save")}
-              </button>
-            </div>
+      {canEdit && (
+        <CardFooter className="justify-between gap-3">
+          <div className="text-[11.5px] text-ink-faint">
+            {open
+              ? isCustom
+                ? t("access.count.none")
+                : t("access.count.none.preset")
+              : t("access.count.n", { n: String(effectiveCIDRs.length) })}
+            {savedFlash && (
+              <span className="ml-3 text-status-ok-fg">{t("access.toast.saved")}</span>
+            )}
           </div>
-        )}
-      </div>
-    </section>
+          <div className="flex items-center gap-2">
+            {dirty && (
+              <Button variant="ghost" onClick={reset}>
+                {t("access.button.reset")}
+              </Button>
+            )}
+            <Button onClick={() => save.mutate()} disabled={!dirty || save.isPending}>
+              {save.isPending ? t("access.button.save.busy") : t("access.button.save")}
+            </Button>
+          </div>
+        </CardFooter>
+      )}
+    </Card>
   );
 }
 
@@ -350,18 +301,14 @@ function CustomModeBody({
         {t("access.preset.list.label")}
       </div>
       <div>
-        <textarea
+        <Textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           disabled={disabled}
           spellCheck={false}
           rows={6}
           placeholder={t("access.custom.placeholder")}
-          className={cn(
-            "w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint",
-            "focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong",
-            disabled && "opacity-60 cursor-not-allowed",
-          )}
+          className="font-mono"
         />
         <p className="mt-2 text-[11.5px] text-ink-muted leading-relaxed">
           {t("access.mode.custom.hint")}

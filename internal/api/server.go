@@ -103,6 +103,8 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/settings", s.handleAdminGetSettings)
 			r.Patch("/settings", s.handleAdminPatchSettings)
 			r.Get("/egress", s.handleAdminEgressOverview)
+			r.Get("/egress-proxy/status", s.handleEgressProxyStatus)
+			r.Get("/egress-logs", s.handleEgressLogs)
 			r.Get("/cidr-presets", s.handleListCIDRPresets)
 			r.Put("/cidr-presets/{name}", s.handlePutCIDRPreset)
 			r.Delete("/cidr-presets/{name}", s.handleDeleteCIDRPreset)
@@ -125,6 +127,9 @@ func (s *Server) Routes() http.Handler {
 				// writable by platform admins only (enforced in the handler).
 				r.Get("/egress", s.handleListProjectEgress)
 				r.Put("/egress", s.handlePutProjectEgress)
+				r.Get("/egress-mode", s.handleGetEgressMode)
+				r.Patch("/egress-mode", s.handlePatchEgressMode)
+				r.Get("/egress-report", s.handleEgressReport)
 				r.Route("/path-rules", func(r chi.Router) {
 					r.Get("/", s.handleListPathRules)
 					r.Post("/", s.handleCreatePathRule)

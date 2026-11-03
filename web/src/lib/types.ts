@@ -67,6 +67,8 @@ export interface CIDRPreset {
   description: string;
   cidrs: string[];
   is_system: boolean;  // public/internal are system — can't be deleted
+  notes?: Record<string, string>; // cidr → human label
+  project_count?: number;
   updated_at: string;
   updated_by?: string | null;
 }
@@ -212,4 +214,12 @@ export interface Paged<T> {
   limit: number;
   offset: number;
   items: T[];
+}
+
+export type EgressMode = "off" | "observe" | "enforce";
+export interface EgressProxyStatus {
+  proxy: { ready?: boolean; phase: string; reason?: string; restarts?: number; started_at?: string; config_hash?: string; last_error?: string };
+  modes: Record<string, number>;
+  recent?: { allowed: number; denied: number };
+  checked_at: string;
 }

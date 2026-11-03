@@ -3,12 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
-import { cn } from "../lib/cn";
 import { timeAgo } from "../lib/format";
 import { PageContainer, PageHeader } from "../components/Page";
 import { ErrorState, LoadingRows } from "../components/States";
-import type { CIDRPreset, SystemSettings } from "../lib/types";
-import { ProjectAccessManager } from "../components/ProjectAccessManager";
+import type { SystemSettings } from "../lib/types";
+import { Alert, Badge, Button, Card, Input, Label } from "../components/ui";
 
 const SECRET_PLACEHOLDER = "********";
 
@@ -131,41 +130,21 @@ export function Settings() {
         actions={
           <div className="flex items-center gap-2">
             {dirty && (
-              <button
-                onClick={() => setDraft({})}
-                className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink transition-colors"
-              >
+              <Button variant="ghost" onClick={() => setDraft({})}>
                 {t("settings.button.reset")}
-              </button>
+              </Button>
             )}
-            <button
-              disabled={!dirty || save.isPending}
-              onClick={() => save.mutate(draft)}
-              className={cn(
-                "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
-                dirty && !save.isPending
-                  ? "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
-                  : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
-              )}
-            >
+            <Button disabled={!dirty || save.isPending} onClick={() => save.mutate(draft)}>
               {save.isPending ? t("settings.button.save.busy") : t("settings.button.save")}
-            </button>
+            </Button>
           </div>
         }
       />
 
       {toast && (
-        <div
-          className={cn(
-            "mb-6 rounded-md border px-4 py-2.5 text-[12.5px]",
-            toast.kind === "ok"
-              ? "border-status-ok-fg/30 bg-status-ok-bg/40 text-status-ok-fg"
-              : "border-status-fail-fg/30 bg-status-fail-bg/40 text-status-fail-fg",
-          )}
-          role="status"
-        >
+        <Alert variant={toast.kind === "ok" ? "success" : "danger"} className="mb-6 text-[12.5px]">
           {toast.msg}
-        </div>
+        </Alert>
       )}
 
       <Section title={t("settings.section.kc.title")} description={t("settings.section.kc.desc")}>
@@ -200,8 +179,6 @@ export function Settings() {
         ))}
       </Section>
 
-      <CIDRPresetsSection />
-      <ProjectAccessManager />
     </PageContainer>
   );
 }
@@ -229,9 +206,7 @@ function Section({
         <h2 className="text-[15px] font-medium text-ink-strong">{title}</h2>
         <p className="mt-1.5 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">{description}</p>
       </header>
-      <div className="rounded-lg border border-line-subtle bg-canvas-base divide-y divide-line-subtle">
-        {children}
-      </div>
+      <Card className="divide-y divide-line-subtle">{children}</Card>
     </section>
   );
 }
@@ -271,18 +246,14 @@ function Field({
   return (
     <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-[200px_1fr] gap-x-6 gap-y-1.5">
       <div className="pt-1.5">
-        <label htmlFor={`f-${field}`} className="block text-[12.5px] font-medium text-ink">
+        <Label htmlFor={`f-${field}`} className="block text-[12.5px]">
           {label}
-        </label>
+        </Label>
         <div className="mt-1.5 flex items-center gap-1.5">
           {dbMeta?.has_override ? (
-            <span className="inline-flex items-center rounded-full bg-canvas-raised text-ink-strong px-1.5 py-0.5 text-[10px] font-medium">
-              {t("settings.badge.db")}
-            </span>
+            <Badge variant="solid" className="px-1.5 text-[10px]">{t("settings.badge.db")}</Badge>
           ) : (
-            <span className="inline-flex items-center rounded-full bg-canvas-raised text-ink-faint px-1.5 py-0.5 text-[10px] font-medium">
-              {t("settings.badge.env")}
-            </span>
+            <Badge className="px-1.5 text-[10px] text-ink-faint">{t("settings.badge.env")}</Badge>
           )}
           {dbMeta?.updated_at && (
             <span className="text-[10.5px] text-ink-faint" title={dbMeta.updated_at}>
@@ -292,7 +263,7 @@ function Field({
         </div>
       </div>
       <div>
-        <input
+        <Input
           id={`f-${field}`}
           type={inputType}
           value={inputValue}
@@ -300,299 +271,10 @@ function Field({
           spellCheck={false}
           autoComplete="off"
           onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
+          className="font-mono"
         />
         {hint && <p className="mt-1.5 text-[11.5px] text-ink-muted leading-relaxed">{hint}</p>}
       </div>
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Access presets — global IP allow-list templates that projects pick from.
-// ---------------------------------------------------------------------------
-
-const SLUG_RE = /^[a-z0-9][a-z0-9_-]{2,29}$/;
-
-function CIDRPresetsSection() {
-  const { t } = useI18n();
-  const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["cidr-presets"], queryFn: api.listCIDRPresets });
-
-  // Inline editor state. `editing.name === ""` means "new preset" form.
-  const [editing, setEditing] = useState<{
-    name: string;
-    label: string;
-    description: string;
-    cidrs: string;
-    isNew: boolean;
-  } | null>(null);
-  const [opError, setOpError] = useState<string | null>(null);
-
-  const save = useMutation({
-    mutationFn: async () => {
-      if (!editing) throw new Error("no draft");
-      const cidrs = editing.cidrs
-        .split(/\r?\n/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-      return api.upsertCIDRPreset(editing.name, {
-        label: editing.label,
-        description: editing.description,
-        cidrs,
-      });
-    },
-    onSuccess: () => {
-      setOpError(null);
-      setEditing(null);
-      qc.invalidateQueries({ queryKey: ["cidr-presets"] });
-    },
-    onError: (e) => setOpError(e instanceof ApiError ? e.message : String(e)),
-  });
-
-  const del = useMutation({
-    mutationFn: (name: string) => api.deleteCIDRPreset(name),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cidr-presets"] }),
-    onError: (e) => setOpError(e instanceof ApiError ? e.message : String(e)),
-  });
-
-  function startNew() {
-    setOpError(null);
-    setEditing({ name: "", label: "", description: "", cidrs: "", isNew: true });
-  }
-
-  function startEdit(p: CIDRPreset) {
-    setOpError(null);
-    setEditing({
-      name: p.name,
-      label: p.label,
-      description: p.description,
-      cidrs: p.cidrs.join("\n"),
-      isNew: false,
-    });
-  }
-
-  function onDelete(p: CIDRPreset) {
-    if (!confirm(t("presets.confirm.delete", { label: p.label }))) return;
-    del.mutate(p.name);
-  }
-
-  const presets = q.data?.presets ?? [];
-  const slugValid = editing?.isNew ? SLUG_RE.test(editing.name) : true;
-  const canSave =
-    !!editing &&
-    editing.label.trim().length > 0 &&
-    slugValid &&
-    !save.isPending;
-
-  return (
-    <section className="mb-10" id="presets">
-      <header className="mb-5 flex items-start justify-between gap-6">
-        <div>
-          <h2 className="text-[15px] font-medium text-ink-strong">{t("presets.section.title")}</h2>
-          <p className="mt-1.5 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">
-            {t("presets.section.desc")}
-          </p>
-        </div>
-        {!editing && (
-          <button
-            onClick={startNew}
-            className="shrink-0 px-3 py-1.5 rounded-md text-[12.5px] font-medium bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium transition-colors"
-          >
-            {t("presets.add.button")}
-          </button>
-        )}
-      </header>
-
-      {q.error && (
-        <ErrorState
-          message={
-            q.error instanceof ApiError && q.error.status === 403
-              ? t("settings.error.noadmin")
-              : (q.error as Error).message
-          }
-          onRetry={() => q.refetch()}
-        />
-      )}
-      {q.isLoading && <LoadingRows rows={2} cols={2} />}
-
-      {q.data && (
-        <div className="rounded-lg border border-line-subtle bg-canvas-base overflow-hidden">
-          <table className="min-w-full text-[13px]">
-            <thead className="bg-canvas-surface">
-              <tr className="text-left text-[12px] font-medium text-ink-muted">
-                <th className="px-5 py-3 font-medium">{t("presets.col.label")}</th>
-                <th className="px-5 py-3 font-medium">{t("presets.col.cidrs")}</th>
-                <th className="px-5 py-3 font-medium">{t("presets.col.system")}</th>
-                <th className="px-5 py-3 font-medium text-right">{t("presets.col.actions")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line-subtle">
-              {presets.map((p) => (
-                <tr key={p.name} className="align-top">
-                  <td className="px-5 py-3.5">
-                    <div className="text-ink-strong font-medium">{p.label}</div>
-                    <div className="text-[11.5px] font-mono text-ink-faint mt-0.5">{p.name}</div>
-                    {p.description && (
-                      <div className="text-[12px] text-ink-muted mt-1 max-w-md leading-snug">
-                        {p.description}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5 text-[11.5px] text-ink align-top">
-                    {p.cidrs.length === 0 ? (
-                      <span className="text-ink-faint italic font-mono">—</span>
-                    ) : (
-                      <div>
-                        <div className="text-[12px] text-ink-faint mb-1 font-sans">
-                          {t("presets.cidrs.count", { n: String(p.cidrs.length) })}
-                        </div>
-                        <div className="max-h-40 overflow-y-auto font-mono leading-relaxed pr-1">
-                          {p.cidrs.map((c) => (
-                            <div key={c}>{c}</div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    {p.is_system ? (
-                      <span
-                        className="inline-flex items-center rounded-full bg-canvas-raised text-ink-muted px-1.5 py-0.5 text-[10.5px] font-medium"
-                        title={t("presets.system.hint")}
-                      >
-                        {t("presets.system.tag")}
-                      </span>
-                    ) : (
-                      <span className="text-ink-faint text-[12px]">—</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                    <button
-                      onClick={() => startEdit(p)}
-                      className="text-[12px] text-brand hover:underline mr-3"
-                    >
-                      {t("presets.button.save")}
-                    </button>
-                    {!p.is_system && (
-                      <button
-                        onClick={() => onDelete(p)}
-                        disabled={del.isPending}
-                        className="text-[12px] text-status-fail-fg hover:underline"
-                      >
-                        {t("presets.button.delete")}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {editing && (
-        <div className="mt-6 rounded-lg border border-ink-strong/30 bg-canvas-surface px-5 py-5 space-y-4">
-          <h3 className="text-[14px] font-semibold text-ink-strong">
-            {editing.isNew ? t("presets.new.title") : t("presets.edit.title", { label: editing.label || editing.name })}
-          </h3>
-
-          {editing.isNew && (
-            <PresetField label={t("presets.field.name")} hint={t("presets.field.name.hint")}>
-              <input
-                value={editing.name}
-                onChange={(e) => setEditing({ ...editing, name: e.target.value.toLowerCase() })}
-                spellCheck={false}
-                autoComplete="off"
-                placeholder="internal-vpc"
-                className={cn(
-                  "w-full rounded-md border bg-canvas-base px-3 py-1.5 text-[13px] font-mono text-ink-strong focus:outline-none focus:ring-2 focus:ring-brand/30",
-                  slugValid ? "border-line focus:border-line-strong" : "border-status-fail-fg focus:border-status-fail-fg",
-                )}
-              />
-            </PresetField>
-          )}
-
-          <PresetField label={t("presets.field.label")} hint={t("presets.field.label.hint")}>
-            <input
-              value={editing.label}
-              onChange={(e) => setEditing({ ...editing, label: e.target.value })}
-              spellCheck={false}
-              className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] text-ink-strong focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
-            />
-          </PresetField>
-
-          <PresetField label={t("presets.field.description")}>
-            <input
-              value={editing.description}
-              onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-              className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] text-ink-strong focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
-            />
-          </PresetField>
-
-          <PresetField label={t("presets.field.cidrs")} hint={t("presets.field.cidrs.hint")}>
-            <textarea
-              value={editing.cidrs}
-              onChange={(e) => setEditing({ ...editing, cidrs: e.target.value })}
-              spellCheck={false}
-              rows={6}
-              placeholder="10.0.0.0/8&#10;192.168.1.0/24"
-              className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
-            />
-          </PresetField>
-
-          {opError && (
-            <div className="rounded-md border border-status-fail-fg/30 bg-status-fail-bg/40 text-status-fail-fg text-[12px] px-3 py-2">
-              {opError}
-            </div>
-          )}
-
-          <div className="flex items-center justify-end gap-2">
-            <button
-              onClick={() => {
-                setEditing(null);
-                setOpError(null);
-              }}
-              className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink transition-colors"
-            >
-              {t("presets.button.cancel")}
-            </button>
-            <button
-              onClick={() => save.mutate()}
-              disabled={!canSave}
-              className={cn(
-                "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
-                canSave
-                  ? "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
-                  : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
-              )}
-            >
-              {save.isPending ? t("presets.button.save.busy") : t("presets.button.save")}
-            </button>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function PresetField({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-x-6 gap-y-1.5">
-      <label className="pt-1.5 text-[12.5px] font-medium text-ink">{label}</label>
-      <div>
-        {children}
-        {hint && <p className="mt-1.5 text-[11.5px] text-ink-muted leading-relaxed">{hint}</p>}
-      </div>
-    </div>
-  );
-}
-

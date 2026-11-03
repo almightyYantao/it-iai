@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
-import { cn } from "../lib/cn";
+import { Alert, Button, Card, CardBody, CardHeader, Input, Label, Table, TBody, TD, TH, THead, TR } from "../components/ui";
 import { Breadcrumbs, PageContainer, PageHeader } from "../components/Page";
 import { StatusBadge, VisibilityPill } from "../components/StatusBadge";
 import { EmptyState, ErrorState, LoadingRows } from "../components/States";
@@ -94,25 +94,22 @@ export function ProjectDetail() {
           </span>
         }
         actions={
-          <a
-            href={p.url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-line bg-canvas-surface hover:bg-canvas-raised px-3 py-1.5 text-[12.5px] font-medium font-mono text-ink transition"
-          >
-            {p.url.replace(/^https?:\/\//, "")}
-            <ExternalIcon className="size-3.5 opacity-70" />
-          </a>
+          <Button asChild variant="secondary" className="font-mono">
+            <a href={p.url} target="_blank" rel="noreferrer">
+              {p.url.replace(/^https?:\/\//, "")}
+              <ExternalIcon className="size-3.5 opacity-70" />
+            </a>
+          </Button>
         }
       />
 
       {pod && (
-        <section className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 rounded-lg border border-line-subtle bg-canvas-base px-5 py-4">
+        <Card className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 px-5 py-4">
           <PodStat label={t("project.pod.node")} value={pod.node || "—"} mono />
           <PodStat label={t("project.pod.phase")} value={pod.ready ? `${pod.phase} · Ready` : pod.phase || "—"} />
           <PodStat label={t("project.pod.podip")} value={pod.pod_ip || "—"} mono />
           <PodStat label={t("project.pod.name")} value={pod.pod || "—"} mono />
-        </section>
+        </Card>
       )}
 
       <section className="mb-3 flex items-end justify-between">
@@ -140,48 +137,46 @@ export function ProjectDetail() {
 
       {list.length > 0 && (
         <>
-          <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-base">
-            <table className="min-w-full text-[13px]">
-              <thead className="bg-canvas-surface">
-                <tr className="text-left text-[12px] font-medium text-ink-muted">
-                  <th className="px-5 py-3 font-medium">{t("project.deployments.col.id")}</th>
-                  <th className="px-5 py-3 font-medium">{t("project.deployments.col.status")}</th>
-                  <th className="px-5 py-3 font-medium">{t("project.deployments.col.trigger")}</th>
-                  <th className="px-5 py-3 font-medium">{t("project.deployments.col.image")}</th>
-                  <th className="px-5 py-3 font-medium">{t("project.deployments.col.started")}</th>
-                  <th className="px-5 py-3 font-medium">{t("project.deployments.col.deployed")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line-subtle">
-                {list.map((d) => (
-                  <tr
-                    key={d.id}
-                    onClick={() => nav(`/projects/${slug}/deployments/${d.id}`)}
-                    className="group cursor-pointer hover:bg-canvas-surface transition-colors"
-                  >
-                    <td className="px-5 py-3.5 font-mono text-[12px]">
-                      <Link
-                        to={`/projects/${slug}/deployments/${d.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-ink group-hover:text-ink-strong hover:underline"
-                      >
-                        {shortID(d.id)}
-                      </Link>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge status={d.status} />
-                    </td>
-                    <td className="px-5 py-3.5 text-ink-muted">{d.trigger_type}</td>
-                    <td className="px-5 py-3.5 font-mono text-[11.5px] text-ink-faint max-w-xs truncate">
-                      {d.image_tag || t("common.empty")}
-                    </td>
-                    <td className="px-5 py-3.5 text-ink-muted tabular-nums">{timeAgo(d.build_started_at)}</td>
-                    <td className="px-5 py-3.5 text-ink-muted tabular-nums">{timeAgo(d.deployed_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <THead>
+              <tr>
+                <TH>{t("project.deployments.col.id")}</TH>
+                <TH>{t("project.deployments.col.status")}</TH>
+                <TH>{t("project.deployments.col.trigger")}</TH>
+                <TH>{t("project.deployments.col.image")}</TH>
+                <TH>{t("project.deployments.col.started")}</TH>
+                <TH>{t("project.deployments.col.deployed")}</TH>
+              </tr>
+            </THead>
+            <TBody>
+              {list.map((d) => (
+                <TR
+                  key={d.id}
+                  onClick={() => nav(`/projects/${slug}/deployments/${d.id}`)}
+                  className="group cursor-pointer"
+                >
+                  <TD className="font-mono text-[12px]">
+                    <Link
+                      to={`/projects/${slug}/deployments/${d.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-ink group-hover:text-ink-strong hover:underline"
+                    >
+                      {shortID(d.id)}
+                    </Link>
+                  </TD>
+                  <TD>
+                    <StatusBadge status={d.status} />
+                  </TD>
+                  <TD className="text-ink-muted">{d.trigger_type}</TD>
+                  <TD className="font-mono text-[11.5px] text-ink-faint max-w-xs truncate">
+                    {d.image_tag || t("common.empty")}
+                  </TD>
+                  <TD className="text-ink-muted tabular-nums">{timeAgo(d.build_started_at)}</TD>
+                  <TD className="text-ink-muted tabular-nums">{timeAgo(d.deployed_at)}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
           <Pagination state={pg} total={deployments.data?.total ?? 0} onChange={setPg} />
         </>
       )}
@@ -282,49 +277,37 @@ function DangerZone({
   const armed = confirmText.trim() === slug;
 
   return (
-    <section className="rounded-lg border border-status-fail-fg/30 bg-status-fail-bg/20">
-      <header className="px-5 py-4 border-b border-status-fail-fg/20">
-        <h3 className="text-[14px] font-semibold text-status-fail-fg">{t("danger.title")}</h3>
-        <p className="mt-1 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">
-          {t("danger.delete.desc", { name })}
-        </p>
-      </header>
-      <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
+    <Card className="border-status-fail-dot/30">
+      <CardHeader
+        className="border-status-fail-dot/20"
+        title={<span className="text-status-fail-fg">{t("danger.title")}</span>}
+        description={t("danger.delete.desc", { name })}
+      />
+      <CardBody className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
         <div>
-          <label className="block text-[11.5px] text-ink-muted mb-1.5">
+          <Label className="block text-[11.5px] font-normal text-ink-muted mb-1.5">
             {t("danger.delete.confirm.label", { slug })}
-          </label>
-          <input
+          </Label>
+          <Input
             type="text"
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
             placeholder={slug}
             spellCheck={false}
             autoComplete="off"
-            className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-status-fail-fg/30 focus:border-status-fail-fg"
+            className="font-mono"
           />
         </div>
-        <button
-          onClick={() => del.mutate()}
-          disabled={!armed || del.isPending}
-          className={cn(
-            "shrink-0 px-4 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
-            armed && !del.isPending
-              ? "bg-status-fail-fg text-canvas-base hover:opacity-90"
-              : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
-          )}
-        >
+        <Button variant="destructive" className="h-9" onClick={() => del.mutate()} disabled={!armed || del.isPending}>
           {del.isPending ? t("danger.delete.button.busy") : t("danger.delete.button")}
-        </button>
-      </div>
+        </Button>
+      </CardBody>
       {opError && (
         <div className="px-5 pb-4">
-          <div className="rounded-md border border-status-fail-fg/30 bg-status-fail-bg/40 text-status-fail-fg text-[12px] px-3 py-2">
-            {opError}
-          </div>
+          <Alert variant="danger">{opError}</Alert>
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 

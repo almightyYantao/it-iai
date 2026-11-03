@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -38,6 +39,8 @@ const (
 // Config changes are applied by stamping the ConfigMap's hash onto the pod
 // template. squid re-reads nothing on its own, and a rollout is the only way to
 // be sure the running process matches what the database says.
+var squidUID int64 = 13
+
 func (d *Deployer) EnsureEgressProxy(ctx context.Context, squidConf string, ports []int32) error {
 	if err := d.ensureNamespaceNamed(ctx, egressProxyNS); err != nil {
 		return fmt.Errorf("namespace: %w", err)
@@ -88,6 +91,9 @@ func (d *Deployer) EnsureEgressProxy(ctx context.Context, squidConf string, port
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
+			// hostNetwork: old and new pods would fight over the same host ports,
+			// so a rolling update can never finish. Replace instead.
+			Strategy: appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType},
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": egressProxyName}},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
@@ -106,7 +112,11 @@ func (d *Deployer) EnsureEgressProxy(ctx context.Context, squidConf string, port
 						Name:  "squid",
 						Image: egressProxyImage,
 						Args:  []string{"-N", "-f", "/etc/squid/squid.conf"},
-						Ports: containerPorts,
+						// Start as `proxy` (uid 13 in ubuntu/squid). Started as root,
+						// squid drops to proxy after opening its logs and then can't
+						// reopen /dev/stdout, exiting FATAL on every boot.
+						SecurityContext: &corev1.SecurityContext{RunAsUser: &squidUID, RunAsGroup: &squidUID},
+						Ports:           containerPorts,
 						VolumeMounts: []corev1.VolumeMount{{
 							Name:      "conf",
 							MountPath: "/etc/squid/squid.conf",
@@ -119,7 +129,7 @@ func (d *Deployer) EnsureEgressProxy(ctx context.Context, squidConf string, port
 								corev1.ResourceMemory: resource.MustParse("64Mi"),
 							},
 							Limits: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("256Mi"),
+								corev1.ResourceMemory: resource.MustParse("1Gi"),
 							},
 						},
 					}},
@@ -135,17 +145,14 @@ func (d *Deployer) EnsureEgressProxy(ctx context.Context, squidConf string, port
 			},
 		},
 	}
-	// A readiness probe on a listener only works once at least one project has a
-	// port; before that squid is up with no listener at all and any probe would
-	// fail forever, so it's attached conditionally.
-	if len(ports) > 0 {
-		dep.Spec.Template.Spec.Containers[0].ReadinessProbe = &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(int(ports[0]))},
-			},
-			InitialDelaySeconds: 3,
-			PeriodSeconds:       10,
-		}
+	// Probe the loopback listener renderSquidConf always emits, so readiness
+	// works even before any project has a port.
+	dep.Spec.Template.Spec.Containers[0].ReadinessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			TCPSocket: &corev1.TCPSocketAction{Host: "127.0.0.1", Port: intstr.FromInt(3128)},
+		},
+		InitialDelaySeconds: 3,
+		PeriodSeconds:       10,
 	}
 
 	depAPI := d.cs.AppsV1().Deployments(egressProxyNS)
@@ -178,4 +185,67 @@ func (d *Deployer) ensureNamespaceNamed(ctx context.Context, name string) error 
 		},
 	}, metav1.CreateOptions{})
 	return err
+}
+
+// EgressProxyStatus is what the admin UI shows about the proxy.
+type EgressProxyStatus struct {
+	Ready      bool       `json:"ready"`
+	Phase      string     `json:"phase"`
+	Reason     string     `json:"reason,omitempty"`
+	Restarts   int32      `json:"restarts"`
+	StartedAt  *time.Time `json:"started_at,omitempty"`
+	ConfigHash string     `json:"config_hash,omitempty"`
+	LastError  string     `json:"last_error,omitempty"`
+}
+
+// ProxyStatus reads the proxy pod's state. Never errors on "not installed".
+func (d *Deployer) ProxyStatus(ctx context.Context) (*EgressProxyStatus, error) {
+	st := &EgressProxyStatus{Phase: "NotInstalled"}
+	pods, err := d.cs.CoreV1().Pods(egressProxyNS).List(ctx, metav1.ListOptions{LabelSelector: "app=" + egressProxyName})
+	if err != nil {
+		return nil, err
+	}
+	var newest *corev1.Pod
+	for i := range pods.Items {
+		p := &pods.Items[i]
+		if newest == nil || p.CreationTimestamp.After(newest.CreationTimestamp.Time) {
+			newest = p
+		}
+	}
+	if newest == nil {
+		return st, nil
+	}
+	st.Phase = string(newest.Status.Phase)
+	st.ConfigHash = newest.Annotations["vibedeploy.io/config-hash"]
+	for _, c := range newest.Status.ContainerStatuses {
+		st.Ready = c.Ready
+		st.Restarts = c.RestartCount
+		if c.State.Running != nil {
+			t := c.State.Running.StartedAt.Time
+			st.StartedAt = &t
+		}
+		if c.State.Waiting != nil {
+			st.Reason = c.State.Waiting.Reason
+		}
+		if !c.Ready && c.LastTerminationState.Terminated != nil {
+			st.LastError = c.LastTerminationState.Terminated.Reason
+		}
+	}
+	return st, nil
+}
+
+// ProxyLogs returns the last n access-log lines of the newest proxy pod.
+func (d *Deployer) ProxyLogs(ctx context.Context, n int64) (string, error) {
+	pods, err := d.cs.CoreV1().Pods(egressProxyNS).List(ctx, metav1.ListOptions{LabelSelector: "app=" + egressProxyName})
+	if err != nil || len(pods.Items) == 0 {
+		return "", err
+	}
+	name := pods.Items[0].Name
+	for _, p := range pods.Items {
+		if p.Status.Phase == corev1.PodRunning {
+			name = p.Name
+		}
+	}
+	b, err := d.cs.CoreV1().Pods(egressProxyNS).GetLogs(name, &corev1.PodLogOptions{TailLines: &n}).DoRaw(ctx)
+	return string(b), err
 }

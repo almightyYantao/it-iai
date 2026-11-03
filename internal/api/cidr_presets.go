@@ -57,9 +57,10 @@ func (s *Server) handlePutCIDRPreset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Label       string   `json:"label"`
-		Description string   `json:"description"`
-		CIDRs       []string `json:"cidrs"`
+		Label       string            `json:"label"`
+		Description string            `json:"description"`
+		CIDRs       []string          `json:"cidrs"`
+		Notes       map[string]string `json:"notes"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_json", err.Error())
@@ -83,6 +84,17 @@ func (s *Server) handlePutCIDRPreset(w http.ResponseWriter, r *http.Request) {
 		Label:       strings.TrimSpace(body.Label),
 		Description: strings.TrimSpace(body.Description),
 		CIDRs:       cleaned,
+		Notes:       map[string]string{},
+	}
+	// Keep notes only for CIDRs that survived, keyed by normalised form.
+	kept := map[string]bool{}
+	for _, c := range cleaned {
+		kept[c] = true
+	}
+	for raw, note := range body.Notes {
+		if c, err := normaliseCIDR(raw); err == nil && kept[c] && strings.TrimSpace(note) != "" {
+			preset.Notes[c] = strings.TrimSpace(note)
+		}
 	}
 	if actor.Kind == actorUser {
 		id := actor.UserID

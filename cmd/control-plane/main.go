@@ -130,7 +130,11 @@ func runServer() {
 		// Same idea for the egress proxy: rebuild its config from the DB so a
 		// change made while the control plane was down (or a hand-edited
 		// ConfigMap) converges without waiting for the next allow-list edit.
-		go server.SweepEgressProxyAtStartup(ctx)
+		go func() {
+			server.SweepEgressProxyAtStartup(ctx)
+			server.SweepEgressModesAtStartup(ctx)
+		}()
+		go server.RunEgressLogCollector(ctx, 30*time.Second)
 	}
 
 	httpSrv := &http.Server{

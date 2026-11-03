@@ -1,9 +1,13 @@
+import { toast } from "sonner";
+import { confirmDialog } from "./ui/confirm";
+import { EgressModePanel } from "./EgressProxy";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { Alert, Badge, Button, Card, Input, Label, Switch, Tabs, Textarea } from "./ui";
 import type { CIDRPreset, Project, ProjectPathRule } from "../lib/types";
 
 // Admin-only access manager: project list on the left, the selected project's
@@ -17,22 +21,14 @@ const errText = (e: unknown) => (e instanceof ApiError ? e.message : String(e));
 const splitIPs = (v: string) =>
   v.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
 
-const fieldCls =
-  "w-full rounded-lg border border-line bg-canvas-base px-3 py-2 text-[13px] text-ink-strong placeholder:text-ink-faint " +
-  "outline-none transition focus:border-line-strong focus:ring-4 focus:ring-ink-strong/10";
-
 export function ProjectAccessManager() {
   const { t } = useI18n();
   const projects = useQuery({ queryKey: ["admin-projects-all"], queryFn: () => api.listAllProjects(200, 0) });
   const presets = useQuery({ queryKey: ["cidr-presets"], queryFn: api.listCIDRPresets });
   const [q, setQ] = useState("");
   const [slug, setSlug] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const notify: Notify = (ok, text) => {
-    setToast({ ok, text });
-    window.setTimeout(() => setToast(null), 2600);
-  };
+  const notify: Notify = (ok, text) => (ok ? toast.success(text) : toast.error(text));
 
   const all = projects.data?.projects ?? [];
   const list = useMemo(() => {
@@ -51,7 +47,7 @@ export function ProjectAccessManager() {
         <p className="mt-1 text-[12.5px] text-ink-muted leading-relaxed">{t("pa.desc")}</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] overflow-hidden rounded-lg border border-line-subtle bg-canvas-base shadow-soft">
+      <Card className="grid grid-cols-1 lg:grid-cols-[320px_1fr] overflow-hidden shadow-soft">
         {/* Project list */}
         <aside className="border-b lg:border-b-0 lg:border-r border-line-subtle bg-canvas-surface/60">
           <div className="p-3">
@@ -59,8 +55,8 @@ export function ProjectAccessManager() {
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-faint" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" />
               </svg>
-              <input
-                className={cn(fieldCls, "pl-9 rounded-full")}
+              <Input
+                className="pl-9 rounded-full"
                 placeholder={t("pa.search", { n: String(all.length) })}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -72,24 +68,25 @@ export function ProjectAccessManager() {
               const active = p.slug === slug;
               return (
                 <li key={p.slug}>
-                  <button
+                  <Button
+                    variant="ghost"
                     onClick={() => setSlug(p.slug)}
                     className={cn(
-                      "group w-full rounded-md px-3 py-2.5 text-left transition",
-                      active ? "bg-brand text-white shadow-raised" : "hover:bg-canvas-base hover:shadow-soft",
+                      "group block h-auto w-full px-3 py-2.5 text-left font-normal whitespace-normal",
+                      active ? "bg-brand text-white shadow-raised hover:bg-brand hover:text-white" : "hover:bg-canvas-base hover:shadow-soft",
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className={cn("truncate text-[13px] font-medium", active ? "text-white" : "text-ink-strong")}>{p.name}</span>
-                      <span className={cn(
-                        "shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-medium",
+                      <Badge className={cn(
+                        "border-0 text-[10.5px]",
                         active ? "bg-canvas-base/20 text-white" : "bg-canvas-raised text-ink-muted",
                       )}>
                         {labelOf(p.access_preset)}
-                      </span>
+                      </Badge>
                     </div>
                     <div className={cn("mt-0.5 truncate font-mono text-[11px]", active ? "text-white/75" : "text-ink-faint")}>{p.slug}</div>
-                  </button>
+                  </Button>
                 </li>
               );
             })}
@@ -112,16 +109,8 @@ export function ProjectAccessManager() {
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
-      {toast && (
-        <div className={cn(
-          "fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-[12.5px] font-medium text-white shadow-raised",
-          toast.ok ? "bg-ink-strong" : "bg-status-fail-fg",
-        )}>
-          {toast.text}
-        </div>
-      )}
     </section>
   );
 }
@@ -162,23 +151,23 @@ function ProjectPane({ project, presets, notify }: { project: Project; presets: 
           <h4 className="text-[13px] font-semibold text-ink-strong">{t("pa.preset")}</h4>
           <span className="text-[11.5px] text-ink-faint">{t("pa.preset.hint")}</span>
         </div>
-        <div className="inline-flex flex-wrap gap-1 rounded-md bg-canvas-raised p-1">
-          {presets.map((p) => (
-            <button
-              key={p.name}
-              disabled={setPreset.isPending}
-              onClick={() => p.name !== current && setPreset.mutate(p.name)}
-              className={cn(
-                "rounded-lg px-3.5 py-1.5 text-[12.5px] font-medium transition",
-                p.name === current ? "bg-canvas-base text-ink-strong shadow-soft" : "text-ink-muted hover:text-ink-strong",
-              )}
-            >
-              {p.label}
-              <span className="ml-1.5 text-[11px] text-ink-faint">{p.cidrs.length}</span>
-            </button>
-          ))}
-        </div>
+        <Tabs
+          className="h-auto flex-wrap"
+          value={current}
+          onChange={(v) => !setPreset.isPending && v !== current && setPreset.mutate(v)}
+          options={presets.map((p) => ({
+            value: p.name,
+            label: (
+              <>
+                {p.label}
+                <span className="ml-1.5 text-[11px] text-ink-faint">{p.cidrs.length}</span>
+              </>
+            ),
+          }))}
+        />
       </div>
+
+      <EgressModePanel slug={project.slug} notify={notify} />
 
       {/* Rules */}
       <div>
@@ -188,19 +177,16 @@ function ProjectPane({ project, presets, notify }: { project: Project; presets: 
             <p className="text-[11.5px] text-ink-faint">{t("pa.rules.hint")}</p>
           </div>
           {editing !== "new" && (
-            <button
-              onClick={() => setEditing("new")}
-              className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-[12.5px] font-medium text-white shadow-soft transition hover:bg-brand-hover"
-            >
+            <Button size="sm" onClick={() => setEditing("new")}>
               <span className="text-[15px] leading-none">+</span>{t("pa.rule.add")}
-            </button>
+            </Button>
           )}
         </div>
 
         {rootOpen && (
-          <div className="mb-3 rounded-md border border-status-warn-bg bg-status-warn-bg px-4 py-2.5 text-[12px] text-status-warn-fg">
+          <Alert variant="warning" className="mb-3 text-[12px]">
             ⚠ {t("pa.warn.root")}
-          </div>
+          </Alert>
         )}
 
         <div className="space-y-2">
@@ -228,12 +214,9 @@ function ProjectPane({ project, presets, notify }: { project: Project; presets: 
 function ModeBadge({ mode }: { mode: Mode }) {
   const { t } = useI18n();
   return (
-    <span className={cn(
-      "rounded-full px-2 py-0.5 text-[11px] font-medium",
-      mode === "token" ? "bg-status-flight-bg text-status-flight-fg" : "bg-status-warn-bg text-status-warn-fg",
-    )}>
+    <Badge variant={mode === "token" ? "info" : "warning"}>
       {t(`pa.mode.${mode}`)}
-    </span>
+    </Badge>
   );
 }
 
@@ -255,23 +238,24 @@ function RuleRow({ slug, rule, notify, onEdit }: { slug: string; rule: ProjectPa
       <code className="min-w-0 flex-1 truncate font-mono text-[13px] text-ink-strong">{rule.path_prefix}</code>
       <ModeBadge mode={rule.mode} />
       {ext.length > 0 ? (
-        <span title={ext.join("\n")} className="rounded-full bg-status-ok-bg px-2 py-0.5 text-[11px] font-medium text-status-ok-fg">
+        <Badge variant="success" title={ext.join("\n")}>
           🌐 {t("pa.ext.count", { n: String(ext.length) })}
-        </span>
+        </Badge>
       ) : (
-        <span className="rounded-full bg-canvas-raised px-2 py-0.5 text-[11px] text-ink-muted">{t("pa.internal_only")}</span>
+        <Badge>{t("pa.internal_only")}</Badge>
       )}
       <div className="flex gap-1 opacity-60 transition group-hover:opacity-100">
-        <button onClick={onEdit} className="rounded-lg px-2.5 py-1 text-[12px] text-ink-muted hover:bg-canvas-raised hover:text-ink-strong">
+        <Button variant="ghost" size="sm" onClick={onEdit}>
           {t("pa.edit")}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="destructive-ghost"
+          size="sm"
           disabled={del.isPending}
-          onClick={() => confirm(t("pa.delete.confirm", { path: rule.path_prefix })) && del.mutate()}
-          className="rounded-lg px-2.5 py-1 text-[12px] text-ink-muted hover:bg-status-fail-bg hover:text-status-fail-fg"
+          onClick={async () => (await confirmDialog({ title: t("pa.delete.confirm", { path: rule.path_prefix }), danger: true })) && del.mutate()}
         >
           {t("pa.delete")}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -309,48 +293,46 @@ function RuleForm({ slug, rule, notify, onClose }: { slug: string; rule?: Projec
   return (
     <div className="rounded-md border border-line-strong bg-canvas-base p-4 shadow-raised ring-4 ring-ink-strong/10 space-y-4">
       <div>
-        <label className="mb-1.5 block text-[12px] font-medium text-ink">{t("pa.rule.prefix")}</label>
-        <input autoFocus className={cn(fieldCls, "font-mono")} placeholder="/webhook" value={prefix} onChange={(e) => setPrefix(e.target.value)} />
+        <Label className="mb-1.5 block text-[12px]">{t("pa.rule.prefix")}</Label>
+        <Input autoFocus className="font-mono" placeholder="/webhook" value={prefix} onChange={(e) => setPrefix(e.target.value)} />
         {prefix === "/" && <p className="mt-1 text-[11.5px] text-status-warn-fg">{t("pa.warn.root")}</p>}
       </div>
 
       <div>
-        <label className="mb-1.5 block text-[12px] font-medium text-ink">{t("pa.rule.mode")}</label>
+        <Label className="mb-1.5 block text-[12px]">{t("pa.rule.mode")}</Label>
         <div className="grid grid-cols-2 gap-2">
           {(["token", "no_auth"] as Mode[]).map((m) => {
             const disabled = extOn && m === "no_auth";
             return (
-              <button
+              <Button
                 key={m}
+                variant="secondary"
                 disabled={disabled}
                 onClick={() => setMode(m)}
                 className={cn(
-                  "rounded-md border px-3 py-2.5 text-left transition",
+                  "block h-auto px-3 py-2.5 text-left font-normal whitespace-normal disabled:opacity-40",
                   mode === m ? "border-ink-strong bg-canvas-surface" : "border-line-subtle hover:border-line",
-                  disabled && "cursor-not-allowed opacity-40",
                 )}
               >
                 <div className="text-[12.5px] font-medium text-ink-strong">{t(`pa.mode.${m}`)}</div>
                 <div className="mt-0.5 text-[11px] text-ink-muted">{t(`pa.mode.${m}.hint`)}</div>
-              </button>
+              </Button>
             );
           })}
         </div>
       </div>
 
       <div className="rounded-md bg-canvas-surface p-3">
-        <button onClick={toggleExt} className="flex w-full items-center justify-between text-left">
+        <div className="flex w-full items-center justify-between text-left">
           <div>
             <div className="text-[12.5px] font-medium text-ink-strong">{t("pa.ext.toggle")}</div>
             <div className="text-[11px] text-ink-muted">{t("pa.ext.hint")}</div>
           </div>
-          <span className={cn("relative h-5 w-9 shrink-0 rounded-full transition", extOn ? "bg-brand" : "bg-line")}>
-            <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-canvas-base shadow transition-all", extOn ? "left-[18px]" : "left-0.5")} />
-          </span>
-        </button>
+          <Switch checked={extOn} onCheckedChange={toggleExt} />
+        </div>
         {extOn && (
-          <textarea
-            className={cn(fieldCls, "mt-3 h-28 font-mono text-[12px]")}
+          <Textarea
+            className="mt-3 h-28 min-h-0 font-mono text-[12px]"
             placeholder={t("pa.ext.placeholder")}
             value={ips}
             onChange={(e) => setIps(e.target.value)}
@@ -360,19 +342,12 @@ function RuleForm({ slug, rule, notify, onClose }: { slug: string; rule?: Projec
       </div>
 
       <div className="flex justify-end gap-2">
-        <button onClick={onClose} className="rounded-full px-4 py-1.5 text-[12.5px] text-ink-muted hover:bg-canvas-raised">
+        <Button variant="ghost" onClick={onClose}>
           {t("pa.cancel")}
-        </button>
-        <button
-          disabled={!valid || save.isPending}
-          onClick={() => save.mutate()}
-          className={cn(
-            "rounded-full px-4 py-1.5 text-[12.5px] font-medium transition",
-            valid ? "bg-brand text-white hover:bg-brand-hover" : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
-          )}
-        >
+        </Button>
+        <Button disabled={!valid || save.isPending} onClick={() => save.mutate()}>
           {save.isPending ? "…" : t("pa.save")}
-        </button>
+        </Button>
       </div>
     </div>
   );

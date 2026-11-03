@@ -41,11 +41,16 @@ func renderSquidConf(targets []store.EgressProxyTarget) string {
 cache deny all
 cache_store_log none
 cache_log stdio:/dev/stdout
+# Runs as the proxy user from the start (see the Deployment), so there is no
+# root-owned pid file to write and no privilege drop that loses /dev/stdout.
+pid_filename none
 
 # access.log is the audit trail and the only place a blocked request shows up.
 # TCP_DENIED lines are how an admin learns what a project still needs.
 logfile_rotate 0
-access_log stdio:/dev/stdout squid
+# %>lp is the listener port, which identifies the project.
+logformat iai %ts.%03tu %>lp %Ss/%03>Hs %rm %ru
+access_log stdio:/dev/stdout iai
 
 # No via/forwarded headers announcing the proxy, and no client address leak.
 via off
@@ -68,6 +73,11 @@ http_access deny !Safe_ports
 # Health probe for the Deployment, before any project rule.
 acl localhost_src src 127.0.0.1/32
 http_access allow localhost_src manager
+
+# Loopback-only listener that always exists: squid refuses to start with no
+# http_port, which is the state before any project has a port. Also the target
+# of the readiness probe. Nothing is allowed through it.
+http_port 127.0.0.1:3128 name=probe
 http_access deny manager
 
 `)
@@ -77,6 +87,13 @@ http_access deny manager
 		fmt.Fprintf(&b, "# --- %s ---\n", t.Slug)
 		fmt.Fprintf(&b, "http_port %d name=%s\n", t.Port, t.Slug)
 		fmt.Fprintf(&b, "acl %s_port myportname %s\n", name, t.Slug)
+
+		if t.Mode == "observe" {
+			// Observe: let everything through (still 80/443 only, per the rules
+			// above) so the access log shows what the project really needs.
+			fmt.Fprintf(&b, "# observe mode — everything allowed and logged\nhttp_access allow %s_port\n\n", name)
+			continue
+		}
 
 		if len(t.Domains) == 0 {
 			// Listener exists so the pod gets a connection refused-free error

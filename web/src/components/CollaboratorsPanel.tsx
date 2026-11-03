@@ -1,3 +1,4 @@
+import { Button, Card, CardBody, CardHeader, Input, Table, TBody, TD, TH, THead, TR, confirmDialog } from "./ui";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -42,86 +43,77 @@ export function CollaboratorsPanel({ slug, ownerEmail }: { slug: string; ownerEm
     add.mutate(v);
   }
 
-  function onRemove(e: string) {
-    if (!window.confirm(t("collab.remove.confirm", { email: e }))) return;
+  async function onRemove(e: string) {
+    if (!(await confirmDialog({ title: t("collab.remove.confirm", { email: e }), danger: true }))) return;
     remove.mutate(e);
   }
 
   return (
-    <section className="rounded-lg border border-line-subtle bg-canvas-base p-6">
-      <h2 className="text-[15px] font-semibold text-ink-strong mb-1">
-        {t("collab.heading")}
-      </h2>
-      <p className="text-[12.5px] text-ink-muted mb-3">
-        {t("collab.description", { owner: ownerEmail ?? t("common.empty") })}
-      </p>
+    <Card>
+      <CardHeader
+        title={t("collab.heading")}
+        description={t("collab.description", { owner: ownerEmail ?? t("common.empty") })}
+      />
 
-      <form onSubmit={onAdd} className="flex gap-2 mb-3">
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder={t("collab.add.placeholder")}
-          className="flex-1 h-9 rounded-md bg-canvas-surface border border-line px-3 text-[13px] placeholder-ink-faint text-ink focus:outline-none focus:border-line-strong focus:ring-2 focus:ring-brand-ring transition"
-        />
-        <button
-          type="submit"
-          disabled={add.isPending || !email.trim()}
-          className="h-9 rounded-md bg-brand hover:bg-brand-hover disabled:opacity-50 px-4 text-[13px] font-medium text-canvas-base transition"
-        >
-          {t("collab.add.button")}
-        </button>
-      </form>
+      <CardBody>
+        <form onSubmit={onAdd} className="flex gap-2 mb-3">
+          <Input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder={t("collab.add.placeholder")}
+            className="flex-1"
+          />
+          <Button type="submit" className="h-9" disabled={add.isPending || !email.trim()}>
+            {t("collab.add.button")}
+          </Button>
+        </form>
 
-      {opError && (
-        <div className="mb-3">
-          <ErrorState message={opError} />
-        </div>
-      )}
+        {opError && (
+          <div className="mb-3">
+            <ErrorState message={opError} />
+          </div>
+        )}
 
-      {q.isLoading && <LoadingRows rows={2} cols={3} />}
-      {q.error && <ErrorState message={(q.error as Error).message} />}
+        {q.isLoading && <LoadingRows rows={2} cols={3} />}
+        {q.error && <ErrorState message={(q.error as Error).message} />}
 
-      {q.data && (q.data.collaborators?.length ?? 0) === 0 && (
-        <div className="rounded-md border border-dashed border-line bg-canvas-surface px-5 py-6 text-center text-[13px] text-ink-muted">
-          {t("collab.empty", { owner: ownerEmail ?? t("common.empty") })}
-        </div>
-      )}
+        {q.data && (q.data.collaborators?.length ?? 0) === 0 && (
+          <div className="rounded-md border border-dashed border-line bg-canvas-surface px-5 py-6 text-center text-[13px] text-ink-muted">
+            {t("collab.empty", { owner: ownerEmail ?? t("common.empty") })}
+          </div>
+        )}
 
-      {q.data && (q.data.collaborators?.length ?? 0) > 0 && (
-        <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-base">
-          <table className="min-w-full text-[13px]">
-            <thead className="bg-canvas-surface">
-              <tr className="text-left text-[12px] font-medium text-ink-muted">
-                <th className="px-5 py-3 font-medium">{t("collab.col.email")}</th>
-                <th className="px-5 py-3 font-medium">{t("collab.col.role")}</th>
-                <th className="px-5 py-3 font-medium">{t("collab.col.added")}</th>
-                <th className="px-5 py-3 font-medium text-right">{t("users.col.actions")}</th>
+        {q.data && (q.data.collaborators?.length ?? 0) > 0 && (
+          <Table bare>
+            <THead>
+              <tr>
+                <TH>{t("collab.col.email")}</TH>
+                <TH>{t("collab.col.role")}</TH>
+                <TH>{t("collab.col.added")}</TH>
+                <TH className="text-right">{t("users.col.actions")}</TH>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-line-subtle">
+            </THead>
+            <TBody>
               {q.data.collaborators.map((c) => (
-                <tr key={c.user_id} className="hover:bg-canvas-surface transition-colors">
-                  <td className="px-5 py-3"><OwnerCell email={c.email} /></td>
-                  <td className="px-5 py-3 text-ink-muted">
+                <TR key={c.user_id}>
+                  <TD><OwnerCell email={c.email} /></TD>
+                  <TD className="text-ink-muted">
                     {c.role === "admin" ? t("collab.role.admin") : t("collab.role.editor")}
-                  </td>
-                  <td className="px-5 py-3 text-ink-muted tabular-nums">{timeAgo(c.added_at)}</td>
-                  <td className="px-5 py-3 text-right">
-                    <button
-                      onClick={() => onRemove(c.email)}
-                      className="text-[12px] text-ink-faint hover:text-status-fail-fg transition-colors"
-                    >
+                  </TD>
+                  <TD className="text-ink-muted tabular-nums">{timeAgo(c.added_at)}</TD>
+                  <TD className="text-right">
+                    <Button variant="destructive-ghost" size="sm" onClick={() => onRemove(c.email)}>
                       {t("common.remove")}
-                    </button>
-                  </td>
-                </tr>
+                    </Button>
+                  </TD>
+                </TR>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
+            </TBody>
+          </Table>
+        )}
+      </CardBody>
+    </Card>
   );
 }

@@ -1,0 +1,1 @@
+ALTER TABLE cidr_presets DROP COLUMN IF EXISTS notes;

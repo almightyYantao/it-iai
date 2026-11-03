@@ -9,6 +9,7 @@ import { Pagination, type PaginationState } from "../components/Pagination";
 import { ActivityIcon } from "../components/icons";
 import { OwnerCell } from "../components/Owner";
 import { timeAgo } from "../lib/format";
+import { Badge, Button, confirmDialog, Table, TBody, TD, TH, THead, TR } from "../components/ui";
 
 export function Users() {
   const { t } = useI18n();
@@ -26,12 +27,12 @@ export function Users() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
   });
 
-  function onToggle(u: { id: string; email: string; is_admin: boolean }) {
+  async function onToggle(u: { id: string; email: string; is_admin: boolean }) {
     const next = !u.is_admin;
     const msg = next
       ? t("users.confirm.promote", { email: u.email })
       : t("users.confirm.demote", { email: u.email });
-    if (!window.confirm(msg)) return;
+    if (!(await confirmDialog({ title: msg }))) return;
     toggle.mutate({ id: u.id, isAdmin: next });
   }
 
@@ -66,54 +67,46 @@ export function Users() {
 
       {q.data && (q.data.users?.length ?? 0) > 0 && (
         <>
-          <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-base">
-            <table className="min-w-full text-[13px]">
-              <thead className="bg-canvas-surface">
-                <tr className="text-left text-[12px] font-medium text-ink-muted">
-                  <th className="px-5 py-3 font-medium">{t("users.col.email")}</th>
-                  <th className="px-5 py-3 font-medium">{t("users.col.role")}</th>
-                  <th className="px-5 py-3 font-medium">{t("users.col.lastseen")}</th>
-                  <th className="px-5 py-3 font-medium">{t("users.col.created")}</th>
-                  <th className="px-5 py-3 font-medium text-right">{t("users.col.actions")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line-subtle">
+          <Table>
+              <THead className="bg-canvas-surface">
+                <TR className="text-left text-[12px] font-medium text-ink-muted">
+                  <TH className="px-5 py-3 font-medium">{t("users.col.email")}</TH>
+                  <TH className="px-5 py-3 font-medium">{t("users.col.role")}</TH>
+                  <TH className="px-5 py-3 font-medium">{t("users.col.lastseen")}</TH>
+                  <TH className="px-5 py-3 font-medium">{t("users.col.created")}</TH>
+                  <TH className="px-5 py-3 font-medium text-right">{t("users.col.actions")}</TH>
+                </TR>
+              </THead>
+              <TBody className="divide-y divide-line-subtle">
                 {q.data.users.map((u) => (
-                  <tr key={u.id} className="hover:bg-canvas-surface transition-colors">
-                    <td className="px-5 py-3.5">
+                  <TR key={u.id} className="hover:bg-canvas-surface transition-colors">
+                    <TD className="px-5 py-3.5">
                       <OwnerCell email={u.email} />
                       {u.name && <div className="text-[11.5px] text-ink-faint mt-0.5 ml-7">{u.name}</div>}
-                    </td>
-                    <td className="px-5 py-3.5">
+                    </TD>
+                    <TD className="px-5 py-3.5">
                       {u.is_admin ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-status-flight-bg text-status-flight-fg px-2 py-0.5 text-[11.5px] font-medium">
-                          {t("users.role.admin")}
-                        </span>
+                        <Badge variant="info">{t("users.role.admin")}</Badge>
                       ) : (
                         <span className="text-ink-muted text-[12px]">{t("users.role.member")}</span>
                       )}
-                    </td>
-                    <td className="px-5 py-3.5 text-ink-muted tabular-nums">{timeAgo(u.last_seen_at)}</td>
-                    <td className="px-5 py-3.5 text-ink-muted tabular-nums">{timeAgo(u.created_at)}</td>
-                    <td className="px-5 py-3.5 text-right">
-                      <button
+                    </TD>
+                    <TD className="px-5 py-3.5 text-ink-muted tabular-nums">{timeAgo(u.last_seen_at)}</TD>
+                    <TD className="px-5 py-3.5 text-ink-muted tabular-nums">{timeAgo(u.created_at)}</TD>
+                    <TD className="px-5 py-3.5 text-right">
+                      <Button
+                        size="sm"
+                        variant={u.is_admin ? "destructive-ghost" : "ghost"}
                         onClick={() => onToggle(u)}
                         disabled={toggle.isPending}
-                        className={
-                          "text-[12px] transition-colors " +
-                          (u.is_admin
-                            ? "text-ink-faint hover:text-status-fail-fg"
-                            : "text-ink-faint hover:text-ink-strong hover:underline")
-                        }
                       >
                         {u.is_admin ? t("users.action.demote") : t("users.action.promote")}
-                      </button>
-                    </td>
-                  </tr>
+                      </Button>
+                    </TD>
+                  </TR>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TBody>
+            </Table>
           <Pagination state={pg} total={q.data.total ?? 0} onChange={setPg} />
         </>
       )}

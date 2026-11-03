@@ -1,5 +1,6 @@
 import { cn } from "../lib/cn";
 import { useI18n } from "../lib/i18n";
+import { Badge } from "./ui";
 import type { DeploymentStatus, ProjectStatus } from "../lib/types";
 
 type Status = DeploymentStatus | ProjectStatus | string;
@@ -21,12 +22,12 @@ const toneOf: Record<string, Tone> = {
   deleting: "fail",
 };
 
-const toneClass: Record<Tone, string> = {
-  ok:     "bg-status-ok-bg text-status-ok-fg",
-  flight: "bg-status-flight-bg text-status-flight-fg",
-  warn:   "bg-status-warn-bg text-status-warn-fg",
-  fail:   "bg-status-fail-bg text-status-fail-fg",
-  idle:   "bg-status-idle-bg text-status-idle-fg",
+const toneVariant: Record<Tone, "success" | "info" | "warning" | "danger" | "default"> = {
+  ok: "success",
+  flight: "info",
+  warn: "warning",
+  fail: "danger",
+  idle: "default",
 };
 const dotClass: Record<Tone, string> = {
   ok:     "bg-status-ok-dot",
@@ -46,11 +47,12 @@ export function StatusBadge({ status, size = "sm" }: { status: Status; size?: "s
   // key isn't in the dictionary (so future status strings still render).
   const label = t(`status.${status}`);
   return (
-    <span
+    <Badge
+      variant={toneVariant[tone]}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full font-medium tabular-nums",
-        toneClass[tone],
-        size === "sm" ? "px-2 py-0.5 text-[11.5px]" : "px-2.5 py-1 text-[12.5px]"
+        "gap-1.5 tabular-nums",
+        tone === "idle" && "bg-status-idle-bg text-status-idle-fg",
+        size === "md" && "px-2.5 py-1 text-[12.5px]"
       )}
     >
       <span className="relative flex size-1.5 shrink-0">
@@ -58,7 +60,7 @@ export function StatusBadge({ status, size = "sm" }: { status: Status; size?: "s
         <span className={cn("relative size-1.5 rounded-full", dotClass[tone])} />
       </span>
       {label}
-    </span>
+    </Badge>
   );
 }
 
@@ -66,8 +68,6 @@ export function VisibilityPill({ kind }: { kind: string }) {
   const { t } = useI18n();
   const label = t(`visibility.${kind.toLowerCase()}`);
   return (
-    <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-full px-2 py-0.5 text-[11.5px] text-ink-muted bg-canvas-surface border border-line-subtle">
-      {label}
-    </span>
+    <Badge className="gap-1.5">{label}</Badge>
   );
 }

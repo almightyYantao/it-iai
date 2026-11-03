@@ -1,4 +1,4 @@
-import { cn } from "../lib/cn";
+import { Button, Select } from "./ui";
 import { useI18n } from "../lib/i18n";
 
 // Pagination — simple offset/limit pager. Server returns `total`; we compute
@@ -40,19 +40,12 @@ export function Pagination({
         {from}{from === to ? "" : "–" + to} / {total}
       </div>
       <div className="flex items-center gap-3">
-        <select
-          value={pageSize}
-          onChange={(e) => setPageSize(Number(e.target.value))}
-          className="h-8 rounded-md border border-line bg-canvas-base px-2 text-[13px] text-ink focus:outline-none focus:border-line-strong"
-        >
-          {pageSizeOptions.map((n) => (
-            <option key={n} value={n}>{n} / {t("pagination.perpage")}</option>
-          ))}
-        </select>
-        <div className="inline-flex h-8 items-center overflow-hidden rounded-md border border-line bg-canvas-base divide-x divide-line">
+        <Select className="h-8 w-[110px]" value={String(pageSize)} onChange={(v) => setPageSize(Number(v))}
+          options={pageSizeOptions.map((n) => ({ value: String(n), label: `${n} / ${t("pagination.perpage")}` }))} />
+        <div className="inline-flex h-8 items-center [&>*]:rounded-none [&>*:first-child]:rounded-l-md [&>*:last-child]:rounded-r-md [&>*+*]:-ml-px">
           <PageBtn disabled={page <= 1} onClick={() => setPage(1)}>«</PageBtn>
           <PageBtn disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</PageBtn>
-          <span className="px-3 text-[13px] text-ink-strong tabular-nums select-none">
+          <span className="flex h-8 items-center border border-line bg-canvas-base px-3 text-[13px] text-ink-strong tabular-nums select-none">
             {page} / {pages}
           </span>
           <PageBtn disabled={page >= pages} onClick={() => setPage(page + 1)}>›</PageBtn>
@@ -73,17 +66,8 @@ function PageBtn({
   onClick: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "flex h-full w-8 items-center justify-center text-[14px] transition-colors",
-        disabled
-          ? "text-ink-faint cursor-not-allowed"
-          : "text-ink-muted hover:text-ink-strong hover:bg-canvas-surface",
-      )}
-    >
+    <Button variant="secondary" size="icon" onClick={onClick} disabled={disabled} className="text-[14px]">
       {children}
-    </button>
+    </Button>
   );
 }

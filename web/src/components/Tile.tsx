@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "../lib/cn";
+import { Card } from "./ui";
 
 type Tone = "default" | "ok" | "flight" | "warn" | "fail" | "idle";
 
@@ -24,13 +25,13 @@ export function Tile({
   tone?: Tone;
 }) {
   return (
-    <div className="rounded-lg border border-line-subtle bg-canvas-base transition-colors hover:border-line px-5 py-4">
+    <Card className="transition-colors hover:border-line px-5 py-4">
       <div className="text-[13px] text-ink-muted font-medium">{label}</div>
       <div className="mt-2 flex items-baseline gap-2">
         <div className={cn("text-[32px] font-semibold tracking-[-0.03em] leading-none tabular-nums", valueClass[tone])}>{value}</div>
         {hint && <div className="text-[12.5px] text-ink-muted">{hint}</div>}
       </div>
-    </div>
+    </Card>
   );
 }
 

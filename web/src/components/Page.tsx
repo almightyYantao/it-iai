@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { cn } from "../lib/cn";
 import { ChevronRight } from "./icons";
+import { Tabs } from "./ui";
 
 // PageContainer used to cap content at 1080px, which left a wide empty band on
 // large displays. The sidebar (~240px) already gives layout balance — let the
@@ -59,22 +60,5 @@ export function SegmentedControl<T extends string>({
   onChange: (v: T) => void;
   options: { value: T; label: string }[];
 }) {
-  return (
-    <div className="inline-flex rounded-md border border-line-subtle bg-canvas-surface p-0.5 text-[12.5px]">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "px-2.5 py-1 rounded font-medium transition-colors",
-            value === o.value
-              ? "bg-canvas-raised text-ink-strong"
-              : "text-ink-muted hover:text-ink",
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
+  return <Tabs value={value} onChange={onChange} options={options} />;
 }

@@ -1,9 +1,9 @@
+import { Alert, Badge, Button, Card, CardBody, CardHeader, Input, Label, Table, TBody, TD, TH, THead, TR, confirmDialog } from "./ui";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
-import { cn } from "../lib/cn";
 import { timeAgo } from "../lib/format";
 import { ExternalIcon } from "./icons";
 
@@ -103,8 +103,8 @@ export function DomainsPanel({
     add.mutate(v);
   }
 
-  function onRemove(hostname: string) {
-    if (!confirm(t("domains.remove.confirm", { hostname }))) return;
+  async function onRemove(hostname: string) {
+    if (!(await confirmDialog({ title: t("domains.remove.confirm", { hostname }), danger: true }))) return;
     remove.mutate(hostname);
   }
 
@@ -113,29 +113,27 @@ export function DomainsPanel({
   const atLimit = customs.length >= maxCustom;
 
   return (
-    <section className="rounded-lg border border-line-subtle bg-canvas-base">
-      <header className="px-5 py-4 border-b border-line-subtle/60">
-        <h3 className="text-[14px] font-semibold text-ink-strong">{t("domains.heading")}</h3>
-        <p className="mt-1 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">
-          {t("domains.description", { default: defaultHost || "<slug>.example.com" })}
-        </p>
-      </header>
+    <Card>
+      <CardHeader
+        title={t("domains.heading")}
+        description={t("domains.description", { default: defaultHost || "<slug>.example.com" })}
+      />
 
-      <div className="px-5 py-4">
-        <table className="min-w-full text-[13px]">
-          <thead>
-            <tr className="text-left text-[12px] font-medium text-ink-muted">
-              <th className="py-2 pr-4 font-medium">{t("domains.col.hostname")}</th>
-              <th className="py-2 pr-4 font-medium">{t("domains.col.kind")}</th>
-              <th className="py-2 pr-4 font-medium">{t("domains.col.added")}</th>
-              <th className="py-2 font-medium text-right">{t("domains.col.actions")}</th>
+      <CardBody>
+        <Table bare>
+          <THead>
+            <tr>
+              <TH>{t("domains.col.hostname")}</TH>
+              <TH>{t("domains.col.kind")}</TH>
+              <TH>{t("domains.col.added")}</TH>
+              <TH className="text-right">{t("domains.col.actions")}</TH>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-line-subtle">
+          </THead>
+          <TBody>
             {/* Default subdomain — never editable. Always at top. */}
             {q.data && (
-              <tr className="align-middle">
-                <td className="py-3 pr-4 font-mono text-[12.5px] text-ink-strong">
+              <TR>
+                <TD className="font-mono text-[12.5px] text-ink-strong">
                   <a
                     href={`https://${defaultHost}`}
                     target="_blank"
@@ -145,19 +143,17 @@ export function DomainsPanel({
                     {defaultHost}
                     <ExternalIcon className="size-3 opacity-60" />
                   </a>
-                </td>
-                <td className="py-3 pr-4">
-                  <span className="inline-flex items-center rounded-full bg-canvas-raised text-ink-strong px-1.5 py-0.5 text-[10.5px] font-medium">
-                    {t("domains.default.tag")}
-                  </span>
-                </td>
-                <td className="py-3 pr-4 text-ink-faint">—</td>
-                <td className="py-3 text-right text-ink-faint">—</td>
-              </tr>
+                </TD>
+                <TD>
+                  <Badge variant="solid">{t("domains.default.tag")}</Badge>
+                </TD>
+                <TD className="text-ink-faint">—</TD>
+                <TD className="text-right text-ink-faint">—</TD>
+              </TR>
             )}
             {customs.map((d) => (
-              <tr key={d.id} className="align-middle">
-                <td className="py-3 pr-4 font-mono text-[12.5px] text-ink-strong">
+              <TR key={d.id}>
+                <TD className="font-mono text-[12.5px] text-ink-strong">
                   <a
                     href={`https://${d.hostname}`}
                     target="_blank"
@@ -167,36 +163,35 @@ export function DomainsPanel({
                     {d.hostname}
                     <ExternalIcon className="size-3 opacity-60" />
                   </a>
-                </td>
-                <td className="py-3 pr-4 text-ink-muted">{t("domains.kind.custom")}</td>
-                <td className="py-3 pr-4 text-ink-muted tabular-nums">{timeAgo(d.created_at)}</td>
-                <td className="py-3 text-right">
+                </TD>
+                <TD className="text-ink-muted">{t("domains.kind.custom")}</TD>
+                <TD className="text-ink-muted tabular-nums">{timeAgo(d.created_at)}</TD>
+                <TD className="text-right">
                   {canEdit && (
-                    <button
+                    <Button
+                      variant="destructive-ghost"
+                      size="sm"
                       onClick={() => onRemove(d.hostname)}
                       disabled={remove.isPending}
-                      className="text-[12px] text-status-fail-fg hover:underline"
                     >
                       ✕
-                    </button>
+                    </Button>
                   )}
-                </td>
-              </tr>
+                </TD>
+              </TR>
             ))}
             {q.data && customs.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-4 text-[12.5px] text-ink-faint italic">
+                <TD colSpan={4} className="text-[12.5px] text-ink-faint italic">
                   {t("domains.empty")}
-                </td>
+                </TD>
               </tr>
             )}
-          </tbody>
-        </table>
+          </TBody>
+        </Table>
 
         {canEdit && atLimit && (
-          <div className="mt-5 rounded-md border border-line-subtle bg-canvas-base/60 text-[12px] text-ink-muted px-3 py-2 leading-relaxed">
-            {t("domains.limit.reached", { max: String(maxCustom) })}
-          </div>
+          <Alert className="mt-5">{t("domains.limit.reached", { max: String(maxCustom) })}</Alert>
         )}
 
         {canEdit && !atLimit && (
@@ -204,35 +199,24 @@ export function DomainsPanel({
             {/* Vanity subdomain — fixed suffix, only the prefix is editable.
                 No DNS / TLS for the user to set up; wildcard cert covers it. */}
             <form onSubmit={onAddSubdomain} className="space-y-2">
-              <div className="text-[12px] font-medium text-ink-muted">
-                {t("domains.subdomain.heading")}
-              </div>
+              <Label className="block text-[12px] text-ink-muted">{t("domains.subdomain.heading")}</Label>
               <div className="flex items-stretch gap-2">
-                <div className="flex-1 inline-flex rounded-md border border-line bg-canvas-base overflow-hidden focus-within:ring-2 focus-within:ring-brand/30 focus-within:border-ink-strong">
-                  <input
+                <div className="flex-1 inline-flex h-9 rounded-md border border-line bg-canvas-base overflow-hidden transition-[border-color,box-shadow] hover:border-line-strong focus-within:border-line-strong focus-within:ring-[3px] focus-within:ring-ink-strong/10">
+                  <Input
                     value={subInput}
                     onChange={(e) => setSubInput(e.target.value)}
                     placeholder={t("domains.subdomain.placeholder")}
                     spellCheck={false}
                     autoComplete="off"
-                    className="flex-1 min-w-0 bg-transparent px-3 py-1.5 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none"
+                    className="h-full min-w-0 flex-1 rounded-none border-0 bg-transparent font-mono focus-visible:ring-0"
                   />
-                  <span className="px-3 py-1.5 text-[12.5px] font-mono text-ink-muted bg-canvas-raised/40 border-l border-line whitespace-nowrap">
+                  <span className="inline-flex items-center px-3 text-[12.5px] font-mono text-ink-muted bg-canvas-surface border-l border-line whitespace-nowrap">
                     .{baseDomain || "example.com"}
                   </span>
                 </div>
-                <button
-                  type="submit"
-                  disabled={add.isPending || subInput.trim() === ""}
-                  className={cn(
-                    "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
-                    add.isPending || subInput.trim() === ""
-                      ? "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed"
-                      : "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium",
-                  )}
-                >
+                <Button type="submit" className="h-9" disabled={add.isPending || subInput.trim() === ""}>
                   {add.isPending ? t("domains.add.busy") : t("domains.subdomain.button")}
-                </button>
+                </Button>
               </div>
               <p className="text-[11.5px] text-ink-muted leading-relaxed">
                 {t("domains.subdomain.hint", { base: baseDomain || "example.com" })}
@@ -241,30 +225,19 @@ export function DomainsPanel({
 
             {/* Fully-custom domain — user owns the DNS, types the full FQDN. */}
             <form onSubmit={onAddCustom} className="space-y-2">
-              <div className="text-[12px] font-medium text-ink-muted">
-                {t("domains.custom.heading")}
-              </div>
+              <Label className="block text-[12px] text-ink-muted">{t("domains.custom.heading")}</Label>
               <div className="flex gap-2">
-                <input
+                <Input
                   value={hostInput}
                   onChange={(e) => setHostInput(e.target.value)}
                   placeholder={t("domains.add.placeholder")}
                   spellCheck={false}
                   autoComplete="off"
-                  className="flex-1 rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
+                  className="flex-1 font-mono"
                 />
-                <button
-                  type="submit"
-                  disabled={add.isPending || hostInput.trim() === ""}
-                  className={cn(
-                    "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
-                    add.isPending || hostInput.trim() === ""
-                      ? "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed"
-                      : "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium",
-                  )}
-                >
+                <Button type="submit" className="h-9" disabled={add.isPending || hostInput.trim() === ""}>
                   {add.isPending ? t("domains.add.busy") : t("domains.add.button")}
-                </button>
+                </Button>
               </div>
               <p className="text-[11.5px] text-ink-muted leading-relaxed">
                 {t("domains.custom.hint", { default: defaultHost || "<slug>.example.com" })}
@@ -273,12 +246,8 @@ export function DomainsPanel({
           </div>
         )}
 
-        {opError && (
-          <div className="mt-3 rounded-md border border-status-fail-fg/30 bg-status-fail-bg/40 text-status-fail-fg text-[12px] px-3 py-2">
-            {opError}
-          </div>
-        )}
-      </div>
-    </section>
+        {opError && <Alert variant="danger" className="mt-3">{opError}</Alert>}
+      </CardBody>
+    </Card>
   );
 }
