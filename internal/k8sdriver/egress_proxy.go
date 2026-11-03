@@ -141,17 +141,14 @@ func (d *Deployer) EnsureEgressProxy(ctx context.Context, squidConf string, port
 			},
 		},
 	}
-	// A readiness probe on a listener only works once at least one project has a
-	// port; before that squid is up with no listener at all and any probe would
-	// fail forever, so it's attached conditionally.
-	if len(ports) > 0 {
-		dep.Spec.Template.Spec.Containers[0].ReadinessProbe = &corev1.Probe{
-			ProbeHandler: corev1.ProbeHandler{
-				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(int(ports[0]))},
-			},
-			InitialDelaySeconds: 3,
-			PeriodSeconds:       10,
-		}
+	// Probe the loopback listener renderSquidConf always emits, so readiness
+	// works even before any project has a port.
+	dep.Spec.Template.Spec.Containers[0].ReadinessProbe = &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			TCPSocket: &corev1.TCPSocketAction{Host: "127.0.0.1", Port: intstr.FromInt(3128)},
+		},
+		InitialDelaySeconds: 3,
+		PeriodSeconds:       10,
 	}
 
 	depAPI := d.cs.AppsV1().Deployments(egressProxyNS)

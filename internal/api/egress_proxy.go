@@ -71,6 +71,11 @@ http_access deny !Safe_ports
 # Health probe for the Deployment, before any project rule.
 acl localhost_src src 127.0.0.1/32
 http_access allow localhost_src manager
+
+# Loopback-only listener that always exists: squid refuses to start with no
+# http_port, which is the state before any project has a port. Also the target
+# of the readiness probe. Nothing is allowed through it.
+http_port 127.0.0.1:3128 name=probe
 http_access deny manager
 
 `)
