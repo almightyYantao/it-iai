@@ -2,11 +2,15 @@ package api
 
 import (
 	"bufio"
+	"context"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var egressModes = map[string]bool{"off": true, "observe": true, "enforce": true}
@@ -187,4 +191,54 @@ func (s *Server) handleEgressReport(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Allowed+out[i].Denied > out[j].Allowed+out[j].Denied })
 	writeJSON(w, http.StatusOK, map[string]any{"domains": out})
+}
+
+// SweepEgressModesAtStartup converges every project whose egress mode isn't
+// off: proxy listener, NetworkPolicy and HTTPS_PROXY env. Lets an admin flip
+// modes in bulk in the database and have them take effect on restart.
+func (s *Server) SweepEgressModesAtStartup(ctx context.Context) {
+	if s.deployer == nil {
+		return
+	}
+	rows, err := s.store.Pool.Query(ctx,
+		`SELECT id, slug FROM projects WHERE deleted_at IS NULL AND egress_mode <> 'off' ORDER BY slug`)
+	if err != nil {
+		log.Printf("egress mode sweep: %v", err)
+		return
+	}
+	type pr struct {
+		id   uuid.UUID
+		slug string
+	}
+	var ps []pr
+	for rows.Next() {
+		var x pr
+		if rows.Scan(&x.id, &x.slug) == nil {
+			ps = append(ps, x)
+		}
+	}
+	rows.Close()
+	for _, p := range ps {
+		if _, err := s.store.EnsureEgressProxyPort(ctx, p.id); err != nil {
+			log.Printf("egress mode sweep %s: port: %v", p.slug, err)
+		}
+	}
+	// Listeners must exist before pods are pointed at them.
+	if err := s.syncEgressProxy(ctx); err != nil {
+		log.Printf("egress mode sweep: proxy: %v", err)
+		return
+	}
+	for _, p := range ps {
+		allows, enforce, proxyURL, err := s.egressConfigForProject(ctx, p.id)
+		if err == nil {
+			err = s.deployer.SyncEgressPolicy(ctx, p.slug, allows, enforce)
+		}
+		if err == nil {
+			err = s.deployer.SetProxyEnv(ctx, p.slug, proxyURL)
+		}
+		if err != nil {
+			log.Printf("egress mode sweep %s: %v", p.slug, err)
+		}
+	}
+	log.Printf("egress mode sweep: %d project(s)", len(ps))
 }

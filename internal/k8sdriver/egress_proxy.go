@@ -129,7 +129,7 @@ func (d *Deployer) EnsureEgressProxy(ctx context.Context, squidConf string, port
 								corev1.ResourceMemory: resource.MustParse("64Mi"),
 							},
 							Limits: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("256Mi"),
+								corev1.ResourceMemory: resource.MustParse("1Gi"),
 							},
 						},
 					}},
