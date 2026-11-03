@@ -7,7 +7,8 @@ import { cn } from "../lib/cn";
 import { timeAgo } from "../lib/format";
 import { PageContainer, PageHeader } from "../components/Page";
 import { ErrorState, LoadingRows } from "../components/States";
-import type { CIDRPreset, ProjectPathRule, SystemSettings } from "../lib/types";
+import type { CIDRPreset, SystemSettings } from "../lib/types";
+import { ProjectAccessManager } from "../components/ProjectAccessManager";
 
 const SECRET_PLACEHOLDER = "********";
 
@@ -200,7 +201,7 @@ export function Settings() {
       </Section>
 
       <CIDRPresetsSection />
-      <ProjectAccessSection />
+      <ProjectAccessManager />
     </PageContainer>
   );
 }
@@ -595,166 +596,3 @@ function PresetField({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Project access — admin edits a project's preset and per-path external sources.
-// ---------------------------------------------------------------------------
-
-const inputCls =
-  "w-full rounded-md border border-line bg-canvas-base px-2.5 py-1.5 text-[12.5px] text-ink-strong";
-
-function splitLines(v: string): string[] {
-  return v.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean);
-}
-
-function ProjectAccessSection() {
-  const { t } = useI18n();
-  const qc = useQueryClient();
-  const projects = useQuery({ queryKey: ["admin-projects-all"], queryFn: () => api.listAllProjects(200, 0) });
-  const presets = useQuery({ queryKey: ["cidr-presets"], queryFn: api.listCIDRPresets });
-  const [slug, setSlug] = useState("");
-  const rules = useQuery({
-    queryKey: ["path-rules", slug],
-    queryFn: () => api.listProjectPathRules(slug),
-    enabled: !!slug,
-  });
-  const project = projects.data?.projects.find((p) => p.slug === slug);
-  const [msg, setMsg] = useState<string | null>(null);
-  const report = (e: unknown) => setMsg(e instanceof ApiError ? e.message : String(e));
-
-  const setPreset = useMutation({
-    mutationFn: (preset: string) => api.setProjectAccess(slug, { preset }),
-    onSuccess: () => {
-      setMsg(t("access.saved"));
-      qc.invalidateQueries({ queryKey: ["admin-projects-all"] });
-    },
-    onError: report,
-  });
-
-  return (
-    <section className="mb-10" id="project-access">
-      <h2 className="text-[15px] font-medium text-ink-strong">{t("access.section.title")}</h2>
-      <p className="mt-1 mb-4 text-[12.5px] text-ink-muted leading-relaxed">{t("access.section.desc")}</p>
-      <div className="rounded-lg border border-line p-5 space-y-5">
-        <PresetField label={t("access.project")}>
-          <select className={inputCls} value={slug} onChange={(e) => { setSlug(e.target.value); setMsg(null); }}>
-            <option value="">{t("access.project.pick")}</option>
-            {(projects.data?.projects ?? []).map((p) => (
-              <option key={p.slug} value={p.slug}>{p.name} ({p.slug})</option>
-            ))}
-          </select>
-        </PresetField>
-
-        {project && (
-          <>
-            <PresetField label={t("access.preset")}>
-              <select
-                className={inputCls}
-                value={project.access_preset ?? "internal"}
-                onChange={(e) => setPreset.mutate(e.target.value)}
-              >
-                {(presets.data?.presets ?? [])
-                  .filter((p) => p.name !== "public")
-                  .map((p) => (
-                    <option key={p.name} value={p.name}>{p.label}</option>
-                  ))}
-              </select>
-            </PresetField>
-
-            <PresetField label={t("access.rules")}>
-              <div className="space-y-3">
-                {(rules.data?.rules ?? []).length === 0 && (
-                  <p className="text-[12px] text-ink-muted">{t("access.rules.empty")}</p>
-                )}
-                {(rules.data?.rules ?? []).map((r) => (
-                  <PathRuleEditor key={r.id} slug={slug} rule={r} onMsg={setMsg} />
-                ))}
-                <PathRuleEditor key={`new-${slug}`} slug={slug} onMsg={setMsg} />
-              </div>
-            </PresetField>
-          </>
-        )}
-        {msg && <p className="text-[12px] text-ink-muted">{msg}</p>}
-      </div>
-    </section>
-  );
-}
-
-function PathRuleEditor({
-  slug,
-  rule,
-  onMsg,
-}: {
-  slug: string;
-  rule?: ProjectPathRule;
-  onMsg: (m: string | null) => void;
-}) {
-  const { t } = useI18n();
-  const qc = useQueryClient();
-  const [prefix, setPrefix] = useState(rule?.path_prefix ?? "");
-  const [mode, setMode] = useState<"no_auth" | "token">(rule?.mode ?? "token");
-  const [cidrs, setCidrs] = useState((rule?.allow_cidrs ?? []).join("\n"));
-  const ext = splitLines(cidrs);
-  const invalid = !prefix.startsWith("/") || (ext.length > 0 && mode !== "token");
-  const done = () => {
-    onMsg(t("access.saved"));
-    qc.invalidateQueries({ queryKey: ["path-rules", slug] });
-  };
-  const fail = (e: unknown) => onMsg(e instanceof ApiError ? e.message : String(e));
-
-  const save = useMutation({
-    mutationFn: () => {
-      const body = { path_prefix: prefix, mode, allow_cidrs: ext };
-      return rule
-        ? api.updateProjectPathRule(slug, rule.id, body)
-        : api.createProjectPathRule(slug, body);
-    },
-    onSuccess: () => {
-      done();
-      if (!rule) { setPrefix(""); setCidrs(""); }
-    },
-    onError: fail,
-  });
-  const del = useMutation({
-    mutationFn: () => api.deleteProjectPathRule(slug, rule!.id),
-    onSuccess: done,
-    onError: fail,
-  });
-
-  return (
-    <div className="rounded-md border border-line p-3 space-y-2">
-      <div className="grid grid-cols-[1fr_140px] gap-2">
-        <input className={inputCls} placeholder={t("access.rule.prefix")} value={prefix} onChange={(e) => setPrefix(e.target.value)} />
-        <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value as "no_auth" | "token")}>
-          <option value="token">token</option>
-          <option value="no_auth">no_auth</option>
-        </select>
-      </div>
-      <textarea
-        className={cn(inputCls, "font-mono h-20")}
-        placeholder={t("access.rule.cidrs")}
-        value={cidrs}
-        onChange={(e) => setCidrs(e.target.value)}
-      />
-      {ext.length > 0 && mode !== "token" && (
-        <p className="text-[11.5px] text-red-600">{t("access.rule.token_required")}</p>
-      )}
-      <div className="flex justify-end gap-2">
-        {rule && (
-          <button className="px-3 py-1 text-[12px] text-ink-muted hover:text-red-600" onClick={() => del.mutate()}>
-            {t("access.rule.delete")}
-          </button>
-        )}
-        <button
-          disabled={invalid || save.isPending}
-          onClick={() => save.mutate()}
-          className={cn(
-            "px-3 py-1 rounded-md text-[12px] font-medium",
-            invalid ? "bg-canvas-raised text-ink-faint cursor-not-allowed" : "bg-ink-strong text-canvas-base",
-          )}
-        >
-          {rule ? t("access.save") : t("access.rule.add")}
-        </button>
-      </div>
-    </div>
-  );
-}
