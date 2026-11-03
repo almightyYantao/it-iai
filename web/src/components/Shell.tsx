@@ -28,7 +28,7 @@ export function Shell() {
     cn(
       "relative px-3 py-3 text-[13.5px] transition-colors",
       isActive
-        ? "text-ink-strong after:absolute after:inset-x-3 after:-bottom-px after:h-0.5 after:bg-ink-strong"
+        ? "text-ink-strong after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-ink-strong"
         : "text-ink-muted hover:text-ink-strong",
     );
   const email = who.data?.kind === "user" ? who.data.email : t("nav.role.token");
@@ -53,7 +53,7 @@ export function Shell() {
             <LogoutIcon className="size-4" />
           </button>
         </div>
-        <nav className="mx-auto flex w-full max-w-[1200px] gap-1 overflow-x-auto px-3 -mb-px">
+        <nav className="mx-auto flex w-full max-w-[1200px] gap-1 overflow-x-auto overflow-y-hidden px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <NavLink to="/" end className={tab}>{t("nav.overview")}</NavLink>
           <NavLink to="/projects" className={tab}>{t("nav.projects")}</NavLink>
           <NavLink to="/skill" className={tab}>{t("nav.skill")}</NavLink>
