@@ -47,9 +47,9 @@ export function ProjectAccessManager() {
         <p className="mt-1 text-[12.5px] text-ink-muted leading-relaxed">{t("pa.desc")}</p>
       </div>
 
-      <Card className="grid grid-cols-1 lg:grid-cols-[320px_1fr] overflow-hidden shadow-soft">
+      <Card className="grid grid-cols-1 lg:grid-cols-[320px_1fr] shadow-soft">
         {/* Project list */}
-        <aside className="border-b lg:border-b-0 lg:border-r border-line-subtle bg-canvas-surface/60">
+        <aside className="flex flex-col border-b lg:border-b-0 lg:border-r border-line-subtle bg-canvas-surface/60 lg:sticky lg:top-[112px] lg:self-start lg:h-[calc(100vh-136px)] lg:rounded-l-lg">
           <div className="p-3">
             <div className="relative">
               <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-faint" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -63,7 +63,7 @@ export function ProjectAccessManager() {
               />
             </div>
           </div>
-          <ul className="max-h-[560px] overflow-y-auto px-2 pb-3 space-y-0.5">
+          <ul className="max-h-[420px] lg:max-h-none lg:flex-1 lg:min-h-0 overflow-y-auto px-2 pb-3 space-y-0.5">
             {list.map((p) => {
               const active = p.slug === slug;
               return (

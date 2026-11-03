@@ -1,4 +1,4 @@
-import type { EgressMode, EgressProxyStatus } from "./types";
+import type { EgressMode, EgressProxyStatus, EgressRule } from "./types";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import type {
   AdminUser,
@@ -183,6 +183,10 @@ export const api = {
 
   egressProxyStatus: () =>
     request<EgressProxyStatus>("GET", "/v1/admin/egress-proxy/status"),
+  listEgressRules: (slug: string) =>
+    request<{ rules: EgressRule[]; can_edit: boolean }>("GET", `/v1/projects/${encodeURIComponent(slug)}/egress`),
+  putEgressRules: (slug: string, rules: Pick<EgressRule, "kind" | "value" | "port" | "note">[]) =>
+    request<unknown>("PUT", `/v1/projects/${encodeURIComponent(slug)}/egress`, { rules }),
   getEgressMode: (slug: string) =>
     request<{ mode: EgressMode; port: number; can_edit: boolean }>("GET", `/v1/projects/${encodeURIComponent(slug)}/egress-mode`),
   setEgressMode: (slug: string, mode: EgressMode) =>

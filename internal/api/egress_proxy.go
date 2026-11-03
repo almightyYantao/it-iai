@@ -67,7 +67,7 @@ acl CONNECT method CONNECT
 
 # CONNECT only to 443. An allow-listed name must not become a tunnel to an
 # arbitrary port on that host.
-http_access deny CONNECT !SSL_ports
+@@ANYPORT@@http_access deny CONNECT !SSL_ports
 http_access deny !Safe_ports
 
 # Health probe for the Deployment, before any project rule.
@@ -104,7 +104,9 @@ http_access deny manager
 		}
 		var https, http []string
 		for _, d := range t.Domains {
-			if d.Port == 80 {
+			if d.Port == 0 {
+				continue // rendered before the port denies, see @@ANYPORT@@
+			} else if d.Port == 80 {
 				http = append(http, d.Value)
 			} else {
 				https = append(https, d.Value)
@@ -130,7 +132,28 @@ http_access deny manager
 # matches, so this line is what makes the whole file deny-by-default.
 http_access deny all
 `)
-	return b.String()
+	var anyB strings.Builder
+	for _, t := range targets {
+		if t.Mode != "enforce" {
+			continue
+		}
+		var anyd []string
+		for _, d := range t.Domains {
+			if d.Port == 0 {
+				anyd = append(anyd, d.Value)
+			}
+		}
+		if len(anyd) == 0 {
+			continue
+		}
+		sort.Strings(anyd)
+		name := "proj_" + strings.ReplaceAll(t.Slug, "-", "_")
+		// Any-port names are admin-chosen exceptions to the 443-only CONNECT rule.
+		fmt.Fprintf(&anyB, "acl %s_anyport myportname %s\nacl %s_any dstdomain %s\nhttp_access allow %s_anyport %s_any\n",
+			name, t.Slug, name, strings.Join(anyd, " "), name, name)
+	}
+	out := strings.Replace(b.String(), "@@ANYPORT@@", anyB.String(), 1)
+	return out
 }
 
 // syncEgressProxy re-renders the proxy config from the database and pushes it to
