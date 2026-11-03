@@ -272,7 +272,7 @@ func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string, extra []
 	}
 	// Admin-approved per-project endpoint rules.
 	for _, e := range extra {
-		if e.Port < 1 || e.Port > 65535 {
+		if e.Port < 0 || e.Port > 65535 {
 			continue
 		}
 		if _, _, err := net.ParseCIDR(e.CIDR); err != nil {
@@ -375,6 +375,9 @@ func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string, extra []
 		}
 		sort.Slice(ports, func(i, j int) bool { return ports[i] < ports[j] })
 		peerPorts := make([]netv1.NetworkPolicyPort, 0, len(ports))
+		if _, any := allowed[c][0]; any {
+			ports = nil // port 0 = any port: a peer with no Ports allows them all
+		}
 		for _, p := range ports {
 			pp := intstr.FromInt(int(p))
 			peerPorts = append(peerPorts, netv1.NetworkPolicyPort{Protocol: &tcp, Port: &pp})

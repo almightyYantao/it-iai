@@ -82,6 +82,7 @@ type proxyLine struct {
 	ts     float64
 	port   int
 	method string
+	dport  int    // destination port (443 for CONNECT host:443, 80 for http://)
 	status string // e.g. TCP_TUNNEL/200, TCP_DENIED/403
 	host   string
 }
@@ -100,6 +101,10 @@ func parseProxyLog(raw string) []proxyLine {
 			continue
 		}
 		host := f[4]
+		dport := 443
+		if strings.HasPrefix(host, "http://") {
+			dport = 80
+		}
 		if i := strings.Index(host, "://"); i >= 0 {
 			host = host[i+3:]
 		}
@@ -107,10 +112,13 @@ func parseProxyLog(raw string) []proxyLine {
 			host = host[:i]
 		}
 		if i := strings.LastIndex(host, ":"); i >= 0 {
+			if p, err := strconv.Atoi(host[i+1:]); err == nil {
+				dport = p
+			}
 			host = host[:i]
 		}
 		ts, _ := strconv.ParseFloat(f[0], 64)
-		out = append(out, proxyLine{ts: ts, port: port, method: f[3], status: f[2], host: host})
+		out = append(out, proxyLine{ts: ts, port: port, dport: dport, method: f[3], status: f[2], host: host})
 	}
 	return out
 }
@@ -196,6 +204,15 @@ func (s *Server) RunEgressLogCollector(ctx context.Context, interval time.Durati
 	if err := s.store.Pool.QueryRow(ctx, `SELECT max(last_seen) FROM egress_domain_stats`).Scan(&last); err == nil && last != nil {
 		cursor = float64(last.UnixMilli()) / 1000
 	}
+	// Backfill: domains recorded before auto-add existed.
+	if _, err := s.store.Pool.Exec(ctx, `
+		INSERT INTO project_egress_rules (project_id, kind, value, port, note)
+		SELECT s.project_id, 'domain', s.host, 443, '观察模式自动加入'
+		  FROM egress_domain_stats s JOIN projects p ON p.id = s.project_id
+		 WHERE s.allowed > 0 AND p.deleted_at IS NULL AND p.egress_mode = 'observe'
+		ON CONFLICT (project_id, kind, value, port) DO NOTHING`); err != nil {
+		log.Printf("egress allow-list backfill: %v", err)
+	}
 	t := time.NewTicker(interval)
 	defer t.Stop()
 	for {
@@ -225,6 +242,7 @@ func (s *Server) collectEgressLog(ctx context.Context, cursor float64) (float64,
 	type agg struct {
 		allowed, denied int64
 		first, last     float64
+		dport           int
 	}
 	m := map[key]*agg{}
 	next := cursor
@@ -242,7 +260,7 @@ func (s *Server) collectEgressLog(ctx context.Context, cursor float64) (float64,
 		k := key{slug, l.host}
 		a := m[k]
 		if a == nil {
-			a = &agg{first: l.ts}
+			a = &agg{first: l.ts, dport: l.dport}
 			m[k] = a
 		}
 		lts = append(lts, l.ts)
@@ -286,6 +304,24 @@ func (s *Server) collectEgressLog(ctx context.Context, cursor float64) (float64,
 		if err != nil {
 			return cursor, err
 		}
+	}
+	// Observe mode exists to learn what a project needs: every domain it reached
+	// through the proxy goes straight into its allow-list, so switching to
+	// enforce later keeps working. No proxy re-render here (each one recreates
+	// the pod); observe ignores the list, and switching mode re-renders.
+	for k, a := range m {
+		if a.allowed == 0 {
+			continue
+		}
+		port := a.dport
+		if port != 80 && port != 443 {
+			port = 0
+		}
+		_, _ = s.store.Pool.Exec(ctx, `
+			INSERT INTO project_egress_rules (project_id, kind, value, port, note)
+			SELECT id, 'domain', $2, $3, '观察模式自动加入' FROM projects
+			 WHERE slug = $1 AND deleted_at IS NULL AND egress_mode = 'observe'
+			ON CONFLICT (project_id, kind, value, port) DO NOTHING`, k.slug, k.host, port)
 	}
 	_, _ = s.store.Pool.Exec(ctx, `DELETE FROM egress_access_log WHERE ts < now() - interval '30 days'`)
 	return next, nil

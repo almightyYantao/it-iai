@@ -11,8 +11,9 @@ type Dict = Record<string, string>;
 const STORAGE_KEY = "iai.locale";
 
 const zh: Dict = {
+  "ew.anyport": "任意端口",
   "ew.title": "出站白名单",
-  "ew.hint": "强制模式下只放行这些目标。域名前加点（.example.com）表示包含所有子域；数据库、SMTP 这类非 HTTP 流量用「IP / 网段」。",
+  "ew.hint": "强制模式下只放行这些目标。域名前加点（.example.com）表示包含所有子域；数据库、SMTP 这类非 HTTP 流量用「IP / 网段」。观察模式下经代理访问过的域名会自动加入。",
   "ew.empty": "还没有规则。强制模式下这个项目将无法访问任何外部地址。",
   "ew.kind.domain": "域名",
   "ew.kind.endpoint": "IP / 网段",
@@ -679,6 +680,7 @@ const zh: Dict = {
 };
 
 const en: Dict = {
+  "ew.anyport": "any",
   "ew.title": "Egress allow-list",
   "ew.hint": "In enforce mode only these targets are reachable. A leading dot (.example.com) includes subdomains; use IP / CIDR for non-HTTP traffic such as databases or SMTP.",
   "ew.empty": "No rules. In enforce mode this project can reach nothing external.",

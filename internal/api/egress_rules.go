@@ -170,10 +170,11 @@ func normaliseEgressRule(kind, value string, port int, protected []net.IP) (stor
 		if port == 0 {
 			port = 443
 		}
-		if port != 80 && port != 443 {
-			return store.EgressRuleInput{}, errors.New(
-				"domain rules only apply to 80 and 443 — the proxy speaks HTTP; " +
-					"for another port use an endpoint rule")
+		if port == -1 {
+			port = 0 // any
+		}
+		if port != 0 && port != 80 && port != 443 {
+			return store.EgressRuleInput{}, errors.New("domain rules take port 80, 443 or any")
 		}
 		d, err := normaliseEgressDomain(v)
 		if err != nil {
@@ -182,8 +183,11 @@ func normaliseEgressRule(kind, value string, port int, protected []net.IP) (stor
 		return store.EgressRuleInput{Kind: kind, Value: d, Port: port}, nil
 
 	case model.EgressKindEndpoint:
-		if port < 1 || port > 65535 {
-			return store.EgressRuleInput{}, errors.New("endpoint rules need a port between 1 and 65535")
+		if port == -1 {
+			port = 0 // any
+		}
+		if port < 0 || port > 65535 {
+			return store.EgressRuleInput{}, errors.New("endpoint rules need a port between 1 and 65535, or any")
 		}
 		// Reuse the same normaliser the IP allow-list uses so the two features
 		// never disagree on what a valid address looks like.
@@ -192,6 +196,16 @@ func normaliseEgressRule(kind, value string, port int, protected []net.IP) (stor
 			return store.EgressRuleInput{}, errors.New(
 				err.Error() + " — endpoint rules take an IP or CIDR, not a hostname " +
 					"(NetworkPolicy cannot match names; if this is an HTTP service, add it as a domain)")
+		}
+		if port == 0 {
+			if _, netw, perr := net.ParseCIDR(c); perr == nil {
+				for _, ip := range protected {
+					if netw.Contains(ip) {
+						return store.EgressRuleInput{}, errors.New(
+							"any-port rules cannot cover the platform host (" + ip.String() + "); name the ports")
+					}
+				}
+			}
 		}
 		if what, bad := egressForbiddenPorts[port]; bad {
 			// Only refuse when the range actually reaches the platform host —

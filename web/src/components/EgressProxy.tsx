@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
-import { Badge, Button, Card, Input, Select } from "./ui";
+import { Badge, Button, Card, Checkbox, Input, Select } from "./ui";
 import { timeAgo } from "../lib/format";
 import type { EgressMode, EgressRule } from "../lib/types";
 
@@ -96,7 +96,7 @@ export function EgressModePanel({ slug, notify }: { slug: string; notify: (ok: b
   const rules = rq.data?.rules ?? [];
   const saveRules = useMutation({
     mutationFn: (next: EgressRule[]) =>
-      api.putEgressRules(slug, next.map(({ kind, value, port, note }) => ({ kind, value, port, note }))),
+      api.putEgressRules(slug, next.map(({ kind, value, port, note }) => ({ kind, value, port: port === 0 ? -1 : port, note }))),
     onSuccess: () => {
       notify(true, t("ew.saved"));
       qc.invalidateQueries({ queryKey: ["egress-rules", slug] });
@@ -191,7 +191,7 @@ function AllowList({ rules, canEdit, busy, onSave }: { rules: EgressRule[]; canE
   const [port, setPort] = useState("443");
   const [note, setNote] = useState("");
   const add = () => {
-    onSave([...rules, { kind, value: value.trim(), port: Number(port) || (kind === "domain" ? 443 : 0), note: note.trim() }]);
+    onSave([...rules, { kind, value: value.trim(), port: port === "any" ? 0 : Number(port), note: note.trim() }]);
     setValue(""); setNote("");
   };
   return (
@@ -207,7 +207,7 @@ function AllowList({ rules, canEdit, busy, onSave }: { rules: EgressRule[]; canE
           {rules.map((r, i) => (
             <li key={`${r.kind}|${r.value}|${r.port}`} className="flex items-center gap-3 px-3 py-2 text-[12.5px]">
               <Badge variant={r.kind === "domain" ? "info" : "default"}>{t(`ew.kind.${r.kind}`)}</Badge>
-              <code className="min-w-0 flex-1 truncate font-mono text-ink-strong">{r.value}:{r.port}</code>
+              <code className="min-w-0 flex-1 truncate font-mono text-ink-strong">{r.value}:{r.port === 0 ? t("ew.anyport") : r.port}</code>
               {r.note && <span className="truncate text-ink-muted">{r.note}</span>}
               {canEdit && (
                 <Button size="sm" variant="destructive-ghost" disabled={busy}
@@ -226,9 +226,15 @@ function AllowList({ rules, canEdit, busy, onSave }: { rules: EgressRule[]; canE
           <Input className="min-w-[200px] flex-1 font-mono" value={value} onChange={(e) => setValue(e.target.value)}
             placeholder={kind === "domain" ? ".larksuite.com" : "10.0.0.5/32"} onKeyDown={(e) => e.key === "Enter" && value.trim() && add()} />
           {kind === "domain" ? (
-            <Select className="w-24" value={port} onChange={setPort} options={[{ value: "443", label: "443" }, { value: "80", label: "80" }]} />
+            <Select className="w-28" value={port} onChange={setPort} options={[{ value: "443", label: "443" }, { value: "80", label: "80" }, { value: "any", label: t("ew.anyport") }]} />
           ) : (
-            <Input className="w-24 font-mono" value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))} placeholder={t("ew.port")} />
+            <div className="flex items-center gap-1.5">
+              <Input className="w-24 font-mono" value={port === "any" ? "" : port} disabled={port === "any"}
+                onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))} placeholder={port === "any" ? t("ew.anyport") : t("ew.port")} />
+              <label className="flex items-center gap-1.5 text-[12.5px] text-ink-muted">
+                <Checkbox checked={port === "any"} onCheckedChange={(v) => setPort(v ? "any" : "")} />{t("ew.anyport")}
+              </label>
+            </div>
           )}
           <Input className="w-44" value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("ew.note")} />
           <Button disabled={busy || !value.trim() || (kind === "endpoint" && !port)} onClick={add}>+ {t("ew.add")}</Button>
