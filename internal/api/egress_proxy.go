@@ -41,6 +41,9 @@ func renderSquidConf(targets []store.EgressProxyTarget) string {
 cache deny all
 cache_store_log none
 cache_log stdio:/dev/stdout
+# Runs as the proxy user from the start (see the Deployment), so there is no
+# root-owned pid file to write and no privilege drop that loses /dev/stdout.
+pid_filename none
 
 # access.log is the audit trail and the only place a blocked request shows up.
 # TCP_DENIED lines are how an admin learns what a project still needs.

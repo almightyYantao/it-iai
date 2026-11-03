@@ -137,7 +137,9 @@ function PresetEditor({ preset, onClose }: { preset: CIDRPreset | null; onClose:
     return out;
   }, [rows, t]);
 
-  const finalCidrs = rows.map((r) => norm(r.cidr)).filter((c): c is string => !!c);
+  const dupIds = new Set([...problems].filter(([, m]) => m === t("pp.err.dup")).map(([id]) => id));
+  const hardErrors = problems.size - dupIds.size;
+  const finalCidrs = [...new Set(rows.map((r) => norm(r.cidr)).filter((c): c is string => !!c))];
   const before = new Set(preset?.cidrs ?? []);
   const after = new Set(finalCidrs);
   const added = [...after].filter((c) => !before.has(c));
@@ -148,7 +150,7 @@ function PresetEditor({ preset, onClose }: { preset: CIDRPreset | null; onClose:
   });
   const metaChanged = label !== (preset?.label ?? "") || desc !== (preset?.description ?? "");
   const dirty = isNew || added.length > 0 || removed.length > 0 || notesChanged || metaChanged;
-  const valid = problems.size === 0 && label.trim() !== "" && (!isNew || SLUG_RE.test(name));
+  const valid = hardErrors === 0 && label.trim() !== "" && (!isNew || SLUG_RE.test(name));
   const emptyInternal = preset?.name === "internal" && finalCidrs.length === 0;
 
   const save = useMutation({
@@ -241,6 +243,17 @@ function PresetEditor({ preset, onClose }: { preset: CIDRPreset | null; onClose:
       </div>
 
       {err && <div className="mb-4 rounded-md border border-status-fail-dot/30 bg-status-fail-bg px-4 py-2.5 text-[13px] text-status-fail-fg">{err}</div>}
+      {dupIds.size > 0 && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-md bg-status-warn-bg px-4 py-2.5 text-[13px] text-status-warn-fg">
+          <span>{t("pp.dup.banner", { n: String(dupIds.size) })}</span>
+          <button className={cn(btn.base, btn.secondary)} onClick={() => setRows((rs) => rs.filter((r) => !dupIds.has(r.id)))}>
+            {t("pp.dup.fix")}
+          </button>
+        </div>
+      )}
+      {hardErrors > 0 && (
+        <div className="mb-4 rounded-md bg-status-fail-bg px-4 py-2.5 text-[13px] text-status-fail-fg">{t("pp.err.banner", { n: String(hardErrors) })}</div>
+      )}
       {emptyInternal && <div className="mb-4 rounded-md bg-status-warn-bg px-4 py-2.5 text-[13px] text-status-warn-fg">{t("pp.warn.emptyInternal")}</div>}
 
       {/* Basics */}
@@ -279,7 +292,8 @@ function PresetEditor({ preset, onClose }: { preset: CIDRPreset | null; onClose:
             <p className="mb-2 text-[12.5px] text-ink-muted">{t("pp.paste.hint")}</p>
             <textarea
               autoFocus
-              className={cn(input, "h-32 py-2 font-mono text-[12.5px]")}
+              rows={10}
+              className="block w-full min-h-[220px] resize-y rounded-md border border-line bg-canvas-base px-3 py-2.5 font-mono text-[12.5px] leading-6 text-ink-strong placeholder:text-ink-faint focus:outline-none focus:border-line-strong focus:ring-[3px] focus:ring-ink-strong/10"
               placeholder={"101.47.4.16 Meegle 新加坡\n10.0.0.0/8, 内网"}
               value={paste}
               onChange={(e) => setPaste(e.target.value)}

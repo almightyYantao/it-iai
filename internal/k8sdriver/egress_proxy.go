@@ -38,6 +38,8 @@ const (
 // Config changes are applied by stamping the ConfigMap's hash onto the pod
 // template. squid re-reads nothing on its own, and a rollout is the only way to
 // be sure the running process matches what the database says.
+var squidUID int64 = 13
+
 func (d *Deployer) EnsureEgressProxy(ctx context.Context, squidConf string, ports []int32) error {
 	if err := d.ensureNamespaceNamed(ctx, egressProxyNS); err != nil {
 		return fmt.Errorf("namespace: %w", err)
@@ -106,7 +108,11 @@ func (d *Deployer) EnsureEgressProxy(ctx context.Context, squidConf string, port
 						Name:  "squid",
 						Image: egressProxyImage,
 						Args:  []string{"-N", "-f", "/etc/squid/squid.conf"},
-						Ports: containerPorts,
+						// Start as `proxy` (uid 13 in ubuntu/squid). Started as root,
+						// squid drops to proxy after opening its logs and then can't
+						// reopen /dev/stdout, exiting FATAL on every boot.
+						SecurityContext: &corev1.SecurityContext{RunAsUser: &squidUID, RunAsGroup: &squidUID},
+						Ports:           containerPorts,
 						VolumeMounts: []corev1.VolumeMount{{
 							Name:      "conf",
 							MountPath: "/etc/squid/squid.conf",

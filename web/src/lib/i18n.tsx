@@ -11,6 +11,9 @@ type Dict = Record<string, string>;
 const STORAGE_KEY = "iai.locale";
 
 const zh: Dict = {
+  "pp.dup.banner": "有 {{n}} 条重复 IP，保存时会自动只保留一条。",
+  "pp.dup.fix": "一键去重",
+  "pp.err.banner": "有 {{n}} 条格式错误，改正或删除后才能保存。",
   "nav.access": "访问控制",
   "nav.presets": "访问预设",
   "pp.title": "访问预设",
@@ -611,6 +614,9 @@ const zh: Dict = {
 };
 
 const en: Dict = {
+  "pp.dup.banner": "{{n}} duplicate IPs; saving keeps one of each.",
+  "pp.dup.fix": "Remove duplicates",
+  "pp.err.banner": "{{n}} invalid entries; fix or remove them to save.",
   "nav.access": "Access",
   "nav.presets": "Presets",
   "pp.title": "Access presets",
