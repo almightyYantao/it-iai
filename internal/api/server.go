@@ -83,6 +83,8 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/internal/auth/check", s.handleAuthCheck)
 	// Token-mode path rule verification — see handleInternalVerifyAPIToken.
 	r.Get("/v1/_internal/verify-api-token", s.handleInternalVerifyAPIToken)
+	// Public: the one-time token in the path is the credential.
+	r.Get("/v1/agent-join/{token}/install.sh", s.handleAgentInstallScript)
 
 	// OIDC code-flow endpoints — unauthenticated by design.
 	r.Get("/v1/auth/oidc-status", s.handleOIDCStatus)
@@ -105,6 +107,14 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/egress", s.handleAdminEgressOverview)
 			r.Get("/egress-proxy/status", s.handleEgressProxyStatus)
 			r.Get("/egress-logs", s.handleEgressLogs)
+			r.Get("/ops", s.handleOps)
+			r.Get("/ops/history", s.handleOpsHistory)
+			r.Get("/agents/join", s.handleListAgentJoins)
+			r.Post("/agents/join", s.handleCreateAgentJoin)
+			r.Post("/nodes/{name}/{action}", s.handleNodeAction)
+			r.Get("/alerts/settings", s.handleGetAlertSettings)
+			r.Put("/alerts/settings", s.handlePutAlertSettings)
+			r.Post("/alerts/test", s.handleTestAlert)
 			r.Get("/cidr-presets", s.handleListCIDRPresets)
 			r.Put("/cidr-presets/{name}", s.handlePutCIDRPreset)
 			r.Delete("/cidr-presets/{name}", s.handleDeleteCIDRPreset)

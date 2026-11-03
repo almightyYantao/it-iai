@@ -191,6 +191,14 @@ export const api = {
     request<{ mode: EgressMode; port: number; can_edit: boolean }>("GET", `/v1/projects/${encodeURIComponent(slug)}/egress-mode`),
   setEgressMode: (slug: string, mode: EgressMode) =>
     request<{ mode: EgressMode }>("PATCH", `/v1/projects/${encodeURIComponent(slug)}/egress-mode`, { mode }),
+  ops: () => request<any>("GET", "/v1/admin/ops"),
+  opsHistory: (hours = 1) => request<{ series: Record<string, { ts: string; cpu: number; mem: number }[]> }>("GET", `/v1/admin/ops/history?hours=${hours}`),
+  agentJoins: () => request<{ joins: any[]; configured: boolean }>("GET", "/v1/admin/agents/join"),
+  createAgentJoin: (node_name: string) => request<{ command: string; expires_at: string }>("POST", "/v1/admin/agents/join", { node_name }),
+  nodeAction: (name: string, action: string) => request<any>("POST", `/v1/admin/nodes/${encodeURIComponent(name)}/${action}`),
+  alertSettings: () => request<{ configured: boolean; enabled: boolean; dashboard_url: string }>("GET", "/v1/admin/alerts/settings"),
+  putAlertSettings: (b: { webhook_url?: string; enabled: boolean; dashboard_url: string }) => request<any>("PUT", "/v1/admin/alerts/settings", b),
+  testAlert: () => request<any>("POST", "/v1/admin/alerts/test"),
   egressLogs: (f: { project?: string; q?: string; status?: string; limit: number; offset: number }) => {
     const p = new URLSearchParams({ limit: String(f.limit), offset: String(f.offset) });
     if (f.project) p.set("project", f.project);

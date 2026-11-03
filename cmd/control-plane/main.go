@@ -135,6 +135,8 @@ func runServer() {
 			server.SweepEgressModesAtStartup(ctx)
 		}()
 		go server.RunEgressLogCollector(ctx, 30*time.Second)
+		go server.RunOpsSampler(ctx, time.Minute)
+		go server.RunAlertNotifier(ctx, time.Minute)
 	}
 
 	httpSrv := &http.Server{

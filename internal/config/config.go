@@ -8,6 +8,14 @@ type ControlPlane struct {
 	ListenAddr    string `env:"CP_LISTEN_ADDR" envDefault:":8080"`
 	DatabaseURL   string `env:"CP_DATABASE_URL,required"`
 	PublicBaseURL string `env:"CP_PUBLIC_BASE_URL" envDefault:"http://localhost:8080"`
+	// K3s join settings for the one-time agent install script. Empty token
+	// disables agent onboarding from the UI.
+	K3sServerURL string `env:"CP_K3S_SERVER_URL"`
+	K3sJoinToken string `env:"CP_K3S_JOIN_TOKEN"`
+	K3sVersion   string `env:"CP_K3S_VERSION"`
+	// AgentInstallBaseURL is what new machines curl the install script from;
+	// defaults to PublicBaseURL.
+	AgentInstallBaseURL string `env:"CP_AGENT_INSTALL_BASE_URL"`
 	AppBaseDomain string `env:"CP_APP_BASE_DOMAIN" envDefault:"lab.localhost"`
 
 	S3Endpoint     string `env:"CP_S3_ENDPOINT,required"`

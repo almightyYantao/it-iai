@@ -94,6 +94,7 @@ export function Shell() {
           {isAdmin && <NavLink to="/access" className={tab}>{t("nav.access")}</NavLink>}
           {isAdmin && <NavLink to="/presets" className={tab}>{t("nav.presets")}</NavLink>}
           {isAdmin && <NavLink to="/egress-logs" className={tab}>{t("nav.egresslogs")}</NavLink>}
+          {isAdmin && <NavLink to="/ops" className={tab}>{t("nav.ops")}</NavLink>}
           {isAdmin && <NavLink to="/settings" className={tab}>{t("nav.settings")}</NavLink>}
         </nav>
       </header>
