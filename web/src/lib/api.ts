@@ -187,6 +187,14 @@ export const api = {
     request<{ mode: EgressMode; port: number; can_edit: boolean }>("GET", `/v1/projects/${encodeURIComponent(slug)}/egress-mode`),
   setEgressMode: (slug: string, mode: EgressMode) =>
     request<{ mode: EgressMode }>("PATCH", `/v1/projects/${encodeURIComponent(slug)}/egress-mode`, { mode }),
+  egressLogs: (f: { project?: string; q?: string; status?: string; limit: number; offset: number }) => {
+    const p = new URLSearchParams({ limit: String(f.limit), offset: String(f.offset) });
+    if (f.project) p.set("project", f.project);
+    if (f.q) p.set("q", f.q);
+    if (f.status && f.status !== "all") p.set("status", f.status);
+    return request<{ entries: { id: number; ts: string; slug: string; method: string; host: string; status: string; denied: boolean }[]; total: number }>(
+      "GET", `/v1/admin/egress-logs?${p}`);
+  },
   egressReport: (slug: string) =>
     request<{ domains: { host: string; allowed: number; denied: number; first_seen: string; last_seen: string }[] }>("GET", `/v1/projects/${encodeURIComponent(slug)}/egress-report`),
   listCIDRPresets: () =>

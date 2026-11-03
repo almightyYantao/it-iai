@@ -104,6 +104,7 @@ func (s *Server) Routes() http.Handler {
 			r.Patch("/settings", s.handleAdminPatchSettings)
 			r.Get("/egress", s.handleAdminEgressOverview)
 			r.Get("/egress-proxy/status", s.handleEgressProxyStatus)
+			r.Get("/egress-logs", s.handleEgressLogs)
 			r.Get("/cidr-presets", s.handleListCIDRPresets)
 			r.Put("/cidr-presets/{name}", s.handlePutCIDRPreset)
 			r.Delete("/cidr-presets/{name}", s.handleDeleteCIDRPreset)

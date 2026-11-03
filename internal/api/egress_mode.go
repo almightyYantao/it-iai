@@ -81,6 +81,7 @@ func (s *Server) handleGetEgressMode(w http.ResponseWriter, r *http.Request) {
 type proxyLine struct {
 	ts     float64
 	port   int
+	method string
 	status string // e.g. TCP_TUNNEL/200, TCP_DENIED/403
 	host   string
 }
@@ -109,7 +110,7 @@ func parseProxyLog(raw string) []proxyLine {
 			host = host[:i]
 		}
 		ts, _ := strconv.ParseFloat(f[0], 64)
-		out = append(out, proxyLine{ts: ts, port: port, status: f[2], host: host})
+		out = append(out, proxyLine{ts: ts, port: port, method: f[3], status: f[2], host: host})
 	}
 	return out
 }
@@ -227,6 +228,9 @@ func (s *Server) collectEgressLog(ctx context.Context, cursor float64) (float64,
 	}
 	m := map[key]*agg{}
 	next := cursor
+	var lts []float64
+	var lslugs, lmethods, lhosts, lstatus []string
+	var ldenied []bool
 	for _, l := range parseProxyLog(raw) {
 		if l.ts <= cursor || l.host == "" {
 			continue
@@ -241,6 +245,12 @@ func (s *Server) collectEgressLog(ctx context.Context, cursor float64) (float64,
 			a = &agg{first: l.ts}
 			m[k] = a
 		}
+		lts = append(lts, l.ts)
+		lslugs = append(lslugs, slug)
+		lmethods = append(lmethods, l.method)
+		lhosts = append(lhosts, l.host)
+		lstatus = append(lstatus, l.status)
+		ldenied = append(ldenied, strings.Contains(l.status, "DENIED"))
 		if strings.Contains(l.status, "DENIED") {
 			a.denied++
 		} else {
@@ -265,7 +275,81 @@ func (s *Server) collectEgressLog(ctx context.Context, cursor float64) (float64,
 			return cursor, err
 		}
 	}
+	if len(lts) > 0 {
+		_, err := s.store.Pool.Exec(ctx, `
+			INSERT INTO egress_access_log (ts, project_id, slug, method, host, status, denied)
+			SELECT to_timestamp(x.ts), p.id, x.slug, x.method, x.host, x.status, x.denied
+			  FROM unnest($1::float8[], $2::text[], $3::text[], $4::text[], $5::text[], $6::bool[])
+			       AS x(ts, slug, method, host, status, denied)
+			  LEFT JOIN projects p ON p.slug = x.slug AND p.deleted_at IS NULL`,
+			lts, lslugs, lmethods, lhosts, lstatus, ldenied)
+		if err != nil {
+			return cursor, err
+		}
+	}
+	_, _ = s.store.Pool.Exec(ctx, `DELETE FROM egress_access_log WHERE ts < now() - interval '30 days'`)
 	return next, nil
+}
+
+// GET /v1/admin/egress-logs?project=&q=&status=allowed|denied&limit=&offset=
+func (s *Server) handleEgressLogs(w http.ResponseWriter, r *http.Request) {
+	actor, _ := ActorFrom(r.Context())
+	if !isAdminActor(actor) {
+		writeError(w, http.StatusForbidden, "not_admin", "admin scope required")
+		return
+	}
+	limit, offset := parsePager(r, 50, 500)
+	qs := r.URL.Query()
+	where := []string{"true"}
+	args := []any{}
+	add := func(cond string, v any) {
+		args = append(args, v)
+		where = append(where, strings.ReplaceAll(cond, "?", "$"+strconv.Itoa(len(args))))
+	}
+	if v := strings.TrimSpace(qs.Get("project")); v != "" {
+		add("slug = ?", v)
+	}
+	if v := strings.TrimSpace(qs.Get("q")); v != "" {
+		add("host ILIKE ?", "%"+v+"%")
+	}
+	switch qs.Get("status") {
+	case "denied":
+		where = append(where, "denied")
+	case "allowed":
+		where = append(where, "NOT denied")
+	}
+	cond := strings.Join(where, " AND ")
+	ctx := r.Context()
+	var total int
+	if err := s.store.Pool.QueryRow(ctx, `SELECT count(*) FROM egress_access_log WHERE `+cond, args...).Scan(&total); err != nil {
+		writeError(w, http.StatusInternalServerError, "db", err.Error())
+		return
+	}
+	type row struct {
+		ID     int64     `json:"id"`
+		TS     time.Time `json:"ts"`
+		Slug   string    `json:"slug"`
+		Method string    `json:"method"`
+		Host   string    `json:"host"`
+		Status string    `json:"status"`
+		Denied bool      `json:"denied"`
+	}
+	out := []row{}
+	rows, err := s.store.Pool.Query(ctx,
+		`SELECT id, ts, slug, method, host, status, denied FROM egress_access_log WHERE `+cond+
+			` ORDER BY ts DESC, id DESC LIMIT `+strconv.Itoa(limit)+` OFFSET `+strconv.Itoa(offset), args...)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "db", err.Error())
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var x row
+		if err := rows.Scan(&x.ID, &x.TS, &x.Slug, &x.Method, &x.Host, &x.Status, &x.Denied); err == nil {
+			out = append(out, x)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"entries": out, "total": total, "limit": limit, "offset": offset})
 }
 
 // SweepEgressModesAtStartup converges every project whose egress mode isn't

@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
@@ -53,8 +54,8 @@ export function ProxyStatusCard() {
           <Stat label={t("ep.uptime")} value={p?.started_at ? timeAgo(p.started_at).replace(/前$| ago$/, "") : "—"} />
           <Stat label={t("ep.restarts.label")} value={p?.restarts ?? 0} bad={(p?.restarts ?? 0) > 0 && !ok} />
           <Stat label={t("ep.projects")} value={`${proxied} (${t("ep.enforce")} ${d.modes.enforce ?? 0})`} />
-          <Stat label={t("ep.allowed")} value={d.recent?.allowed ?? 0} />
-          <Stat label={t("ep.denied")} value={d.recent?.denied ?? 0} bad={(d.recent?.denied ?? 0) > 0} />
+          <Link to="/egress-logs?status=allowed" className="hover:opacity-70"><Stat label={t("ep.allowed") + " →"} value={d.recent?.allowed ?? 0} /></Link>
+          <Link to="/egress-logs?status=denied" className="hover:opacity-70"><Stat label={t("ep.denied") + " →"} value={d.recent?.denied ?? 0} bad={(d.recent?.denied ?? 0) > 0} /></Link>
         </div>
       )}
       {p?.last_error && !ok && <p className="mt-3 font-mono text-[12px] text-status-fail-fg">{t("ep.lasterr")}: {p.last_error}</p>}
@@ -114,7 +115,7 @@ export function EgressModePanel({ slug, notify }: { slug: string; notify: (ok: b
       </div>
       {cur !== "off" && (
         <div className="mt-3 rounded-md border border-line-subtle">
-          <div className="border-b border-line-subtle bg-canvas-surface px-3 py-2 text-[12px] font-medium text-ink-muted">{t("ep.report")}</div>
+          <div className="flex justify-between border-b border-line-subtle bg-canvas-surface px-3 py-2 text-[12px] font-medium text-ink-muted"><span>{t("ep.report")}</span><Link className="hover:text-ink-strong" to={`/egress-logs?project=${slug}`}>{t("ep.report.all")} →</Link></div>
           {domains.length === 0 ? (
             <p className="px-3 py-4 text-[12.5px] text-ink-faint">{t("ep.report.empty")}</p>
           ) : (
