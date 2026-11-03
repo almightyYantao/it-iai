@@ -336,9 +336,13 @@ func (s *Server) egressConfigForProject(ctx context.Context, projectID uuid.UUID
 		return allows, false, "", err
 	}
 	host := s.proxyHost()
+	// Direct internet is never open. The public catch-all is dropped in every
+	// mode; the only way out is the proxy (observe: logs and allows, enforce:
+	// allow-list). off means no internet at all — just the platform's services
+	// and admin endpoint rules.
 	if mode == "off" || port == 0 || net.ParseIP(host) == nil {
-		return allows, false, "", nil
+		return allows, true, "", nil
 	}
 	allows = append(allows, k8sdriver.EgressAllow{CIDR: host + "/32", Port: int32(port)})
-	return allows, mode == "enforce", "http://" + net.JoinHostPort(host, strconv.Itoa(port)), nil
+	return allows, true, "http://" + net.JoinHostPort(host, strconv.Itoa(port)), nil
 }
