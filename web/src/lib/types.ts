@@ -67,6 +67,8 @@ export interface CIDRPreset {
   description: string;
   cidrs: string[];
   is_system: boolean;  // public/internal are system — can't be deleted
+  notes?: Record<string, string>; // cidr → human label
+  project_count?: number;
   updated_at: string;
   updated_by?: string | null;
 }

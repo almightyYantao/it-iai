@@ -10,10 +10,11 @@ import (
 	"github.com/iai/vibedeploy/internal/model"
 )
 
-const presetCols = `name, label, description, cidrs, is_system, updated_at, updated_by`
+const presetCols = `name, label, description, cidrs, is_system, updated_at, updated_by, notes,
+	(SELECT count(*) FROM projects pr WHERE pr.access_preset = cidr_presets.name AND pr.deleted_at IS NULL)`
 
 func scanPreset(row pgx.Row, p *model.CIDRPreset) error {
-	return row.Scan(&p.Name, &p.Label, &p.Description, &p.CIDRs, &p.IsSystem, &p.UpdatedAt, &p.UpdatedBy)
+	return row.Scan(&p.Name, &p.Label, &p.Description, &p.CIDRs, &p.IsSystem, &p.UpdatedAt, &p.UpdatedBy, &p.Notes, &p.ProjectCount)
 }
 
 // ListCIDRPresets returns every preset, sorted with system presets first
@@ -54,16 +55,20 @@ func (s *Store) UpsertCIDRPreset(ctx context.Context, p *model.CIDRPreset, updat
 	if p.CIDRs == nil {
 		p.CIDRs = []string{}
 	}
+	if p.Notes == nil {
+		p.Notes = map[string]string{}
+	}
 	_, err := s.Pool.Exec(ctx, `
-		INSERT INTO cidr_presets (name, label, description, cidrs, is_system, updated_by)
-		VALUES ($1, $2, $3, $4, false, $5)
+		INSERT INTO cidr_presets (name, label, description, cidrs, is_system, updated_by, notes)
+		VALUES ($1, $2, $3, $4, false, $5, $6)
 		ON CONFLICT (name) DO UPDATE SET
 		    label = EXCLUDED.label,
 		    description = EXCLUDED.description,
 		    cidrs = EXCLUDED.cidrs,
+		    notes = EXCLUDED.notes,
 		    updated_at = now(),
 		    updated_by = EXCLUDED.updated_by
-	`, p.Name, p.Label, p.Description, p.CIDRs, updatedBy)
+	`, p.Name, p.Label, p.Description, p.CIDRs, updatedBy, p.Notes)
 	return err
 }
 

@@ -221,11 +221,15 @@ type DeployToken struct {
 // CIDR list. The two system presets (`public`, `internal`) are seeded by
 // migration 0005 and can't be deleted (is_system=true).
 type CIDRPreset struct {
-	Name        string     `json:"name"`  // slug, also the API key
-	Label       string     `json:"label"` // display name shown in the UI dropdown
-	Description string     `json:"description"`
-	CIDRs       []string   `json:"cidrs"`     // empty = "no restriction"
-	IsSystem    bool       `json:"is_system"` // system presets refuse DELETE
-	UpdatedAt   time.Time  `json:"updated_at"`
-	UpdatedBy   *uuid.UUID `json:"updated_by,omitempty"`
+	Name        string   `json:"name"`  // slug, also the API key
+	Label       string   `json:"label"` // display name shown in the UI dropdown
+	Description string   `json:"description"`
+	CIDRs       []string `json:"cidrs"`     // empty = "no restriction"
+	IsSystem    bool     `json:"is_system"` // system presets refuse DELETE
+	// Notes maps a CIDR to a human label. Display only.
+	Notes map[string]string `json:"notes"`
+	// ProjectCount is how many live projects use this preset (list only).
+	ProjectCount int        `json:"project_count"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	UpdatedBy    *uuid.UUID `json:"updated_by,omitempty"`
 }

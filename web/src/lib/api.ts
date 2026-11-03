@@ -182,7 +182,7 @@ export const api = {
 
   listCIDRPresets: () =>
     request<{ presets: CIDRPreset[] }>("GET", "/v1/admin/cidr-presets"),
-  upsertCIDRPreset: (name: string, p: { label: string; description: string; cidrs: string[] }) =>
+  upsertCIDRPreset: (name: string, p: { label: string; description: string; cidrs: string[]; notes?: Record<string, string> }) =>
     request<{ preset: CIDRPreset; warn_resync?: string }>(
       "PUT",
       `/v1/admin/cidr-presets/${encodeURIComponent(name)}`,
