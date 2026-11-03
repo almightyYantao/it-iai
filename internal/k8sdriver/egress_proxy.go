@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -181,4 +182,67 @@ func (d *Deployer) ensureNamespaceNamed(ctx context.Context, name string) error 
 		},
 	}, metav1.CreateOptions{})
 	return err
+}
+
+// EgressProxyStatus is what the admin UI shows about the proxy.
+type EgressProxyStatus struct {
+	Ready      bool       `json:"ready"`
+	Phase      string     `json:"phase"`
+	Reason     string     `json:"reason,omitempty"`
+	Restarts   int32      `json:"restarts"`
+	StartedAt  *time.Time `json:"started_at,omitempty"`
+	ConfigHash string     `json:"config_hash,omitempty"`
+	LastError  string     `json:"last_error,omitempty"`
+}
+
+// ProxyStatus reads the proxy pod's state. Never errors on "not installed".
+func (d *Deployer) ProxyStatus(ctx context.Context) (*EgressProxyStatus, error) {
+	st := &EgressProxyStatus{Phase: "NotInstalled"}
+	pods, err := d.cs.CoreV1().Pods(egressProxyNS).List(ctx, metav1.ListOptions{LabelSelector: "app=" + egressProxyName})
+	if err != nil {
+		return nil, err
+	}
+	var newest *corev1.Pod
+	for i := range pods.Items {
+		p := &pods.Items[i]
+		if newest == nil || p.CreationTimestamp.After(newest.CreationTimestamp.Time) {
+			newest = p
+		}
+	}
+	if newest == nil {
+		return st, nil
+	}
+	st.Phase = string(newest.Status.Phase)
+	st.ConfigHash = newest.Annotations["vibedeploy.io/config-hash"]
+	for _, c := range newest.Status.ContainerStatuses {
+		st.Ready = c.Ready
+		st.Restarts = c.RestartCount
+		if c.State.Running != nil {
+			t := c.State.Running.StartedAt.Time
+			st.StartedAt = &t
+		}
+		if c.State.Waiting != nil {
+			st.Reason = c.State.Waiting.Reason
+		}
+		if !c.Ready && c.LastTerminationState.Terminated != nil {
+			st.LastError = c.LastTerminationState.Terminated.Reason
+		}
+	}
+	return st, nil
+}
+
+// ProxyLogs returns the last n access-log lines of the newest proxy pod.
+func (d *Deployer) ProxyLogs(ctx context.Context, n int64) (string, error) {
+	pods, err := d.cs.CoreV1().Pods(egressProxyNS).List(ctx, metav1.ListOptions{LabelSelector: "app=" + egressProxyName})
+	if err != nil || len(pods.Items) == 0 {
+		return "", err
+	}
+	name := pods.Items[0].Name
+	for _, p := range pods.Items {
+		if p.Status.Phase == corev1.PodRunning {
+			name = p.Name
+		}
+	}
+	b, err := d.cs.CoreV1().Pods(egressProxyNS).GetLogs(name, &corev1.PodLogOptions{TailLines: &n}).DoRaw(ctx)
+	return string(b), err
 }

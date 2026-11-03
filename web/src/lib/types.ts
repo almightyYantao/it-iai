@@ -215,3 +215,11 @@ export interface Paged<T> {
   offset: number;
   items: T[];
 }
+
+export type EgressMode = "off" | "observe" | "enforce";
+export interface EgressProxyStatus {
+  proxy: { ready?: boolean; phase: string; reason?: string; restarts?: number; started_at?: string; config_hash?: string; last_error?: string };
+  modes: Record<string, number>;
+  recent?: { allowed: number; denied: number };
+  checked_at: string;
+}

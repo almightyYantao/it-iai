@@ -1,3 +1,4 @@
+import { EgressModePanel } from "./EgressProxy";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -179,6 +180,8 @@ function ProjectPane({ project, presets, notify }: { project: Project; presets: 
           ))}
         </div>
       </div>
+
+      <EgressModePanel slug={project.slug} notify={notify} />
 
       {/* Rules */}
       <div>

@@ -1,3 +1,4 @@
+import type { EgressMode, EgressProxyStatus } from "./types";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import type {
   AdminUser,
@@ -180,6 +181,14 @@ export const api = {
       { visibility },
     ),
 
+  egressProxyStatus: () =>
+    request<EgressProxyStatus>("GET", "/v1/admin/egress-proxy/status"),
+  getEgressMode: (slug: string) =>
+    request<{ mode: EgressMode; port: number; can_edit: boolean }>("GET", `/v1/projects/${encodeURIComponent(slug)}/egress-mode`),
+  setEgressMode: (slug: string, mode: EgressMode) =>
+    request<{ mode: EgressMode }>("PATCH", `/v1/projects/${encodeURIComponent(slug)}/egress-mode`, { mode }),
+  egressReport: (slug: string) =>
+    request<{ domains: { host: string; allowed: number; denied: number }[] }>("GET", `/v1/projects/${encodeURIComponent(slug)}/egress-report`),
   listCIDRPresets: () =>
     request<{ presets: CIDRPreset[] }>("GET", "/v1/admin/cidr-presets"),
   upsertCIDRPreset: (name: string, p: { label: string; description: string; cidrs: string[]; notes?: Record<string, string> }) =>

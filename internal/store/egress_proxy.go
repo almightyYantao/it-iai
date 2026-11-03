@@ -25,6 +25,7 @@ var ErrNoEgressProxyPort = errors.New("no free egress proxy port in range")
 type EgressProxyTarget struct {
 	Slug    string
 	Port    int
+	Mode    string // observe | enforce (off projects with a port render as enforce: deny)
 	Domains []DomainRule
 }
 
@@ -86,7 +87,7 @@ func (s *Store) EnsureEgressProxyPort(ctx context.Context, projectID uuid.UUID) 
 // needs a reload, and a shuffled list would trigger pointless restarts.
 func (s *Store) ListEgressProxyTargets(ctx context.Context) ([]EgressProxyTarget, error) {
 	rows, err := s.Pool.Query(ctx, `
-		SELECT p.slug, p.egress_proxy_port,
+		SELECT p.slug, p.egress_proxy_port, p.egress_mode,
 		       coalesce(array_agg(r.value ORDER BY r.value, r.port)
 		                FILTER (WHERE r.id IS NOT NULL), '{}') AS domains,
 		       coalesce(array_agg(r.port  ORDER BY r.value, r.port)
@@ -95,7 +96,7 @@ func (s *Store) ListEgressProxyTargets(ctx context.Context) ([]EgressProxyTarget
 		  LEFT JOIN project_egress_rules r
 		         ON r.project_id = p.id AND r.kind = 'domain'
 		 WHERE p.deleted_at IS NULL AND p.egress_proxy_port IS NOT NULL
-		 GROUP BY p.slug, p.egress_proxy_port
+		 GROUP BY p.slug, p.egress_proxy_port, p.egress_mode
 		 ORDER BY p.slug`)
 	if err != nil {
 		return nil, err
@@ -106,7 +107,7 @@ func (s *Store) ListEgressProxyTargets(ctx context.Context) ([]EgressProxyTarget
 		var t EgressProxyTarget
 		var values []string
 		var ports []int32
-		if err := rows.Scan(&t.Slug, &t.Port, &values, &ports); err != nil {
+		if err := rows.Scan(&t.Slug, &t.Port, &t.Mode, &values, &ports); err != nil {
 			return nil, err
 		}
 		for i := range values {
@@ -117,6 +118,68 @@ func (s *Store) ListEgressProxyTargets(ctx context.Context) ([]EgressProxyTarget
 			t.Domains = append(t.Domains, DomainRule{Value: values[i], Port: p})
 		}
 		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// GetProjectEgressMode returns the project's egress mode and proxy port (0 when
+// none is allocated).
+func (s *Store) GetProjectEgressMode(ctx context.Context, projectID uuid.UUID) (string, int, error) {
+	var mode string
+	var port *int
+	err := s.Pool.QueryRow(ctx,
+		`SELECT egress_mode, egress_proxy_port FROM projects WHERE id = $1 AND deleted_at IS NULL`,
+		projectID).Scan(&mode, &port)
+	if err != nil {
+		return "", 0, err
+	}
+	if port == nil {
+		return mode, 0, nil
+	}
+	return mode, *port, nil
+}
+
+func (s *Store) SetProjectEgressMode(ctx context.Context, projectID uuid.UUID, mode string) error {
+	_, err := s.Pool.Exec(ctx, `UPDATE projects SET egress_mode = $2 WHERE id = $1`, projectID, mode)
+	return err
+}
+
+// EgressModeCounts maps mode → number of live projects.
+func (s *Store) EgressModeCounts(ctx context.Context) (map[string]int, error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT egress_mode, count(*) FROM projects WHERE deleted_at IS NULL GROUP BY 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var m string
+		var n int
+		if err := rows.Scan(&m, &n); err != nil {
+			return nil, err
+		}
+		out[m] = n
+	}
+	return out, rows.Err()
+}
+
+// ProxyPortSlugs maps a proxy listener port to its project slug.
+func (s *Store) ProxyPortSlugs(ctx context.Context) (map[int]string, error) {
+	rows, err := s.Pool.Query(ctx,
+		`SELECT egress_proxy_port, slug FROM projects WHERE deleted_at IS NULL AND egress_proxy_port IS NOT NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]string{}
+	for rows.Next() {
+		var p int
+		var slug string
+		if err := rows.Scan(&p, &slug); err != nil {
+			return nil, err
+		}
+		out[p] = slug
 	}
 	return out, rows.Err()
 }

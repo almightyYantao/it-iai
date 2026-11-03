@@ -7,6 +7,7 @@ import { cn } from "../lib/cn";
 import { useI18n } from "../lib/i18n";
 import { BrandMark, LogoutIcon } from "./icons";
 import { SkillBridge } from "./SkillBridge";
+import { ProxyDot } from "./EgressProxy";
 
 export function Shell() {
   const nav = useNavigate();
@@ -44,6 +45,7 @@ export function Shell() {
             {isAdmin ? t("nav.role.admin") : t("nav.role.member")}
           </span>
           <div className="flex-1" />
+          {isAdmin && <ProxyDot />}
           <SkillBridge />
           <ThemeToggle />
           <LangToggle locale={locale} setLocale={setLocale} />

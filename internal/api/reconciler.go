@@ -280,7 +280,7 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 		// fatal: deploying with the platform's own services reachable but an
 		// admin-added destination missing is recoverable (re-save the rules),
 		// whereas failing the deploy would strand the project on its old image.
-		egressAllows, eaerr := r.srv.egressAllowsForProject(ctx, p.ProjectID)
+		egressAllows, egressEnforce, proxyURL, eaerr := r.srv.egressConfigForProject(ctx, p.ProjectID)
 		if eaerr != nil {
 			_, _ = r.srv.store.AppendEvent(ctx, p.ID, "deploy", "warn",
 				"could not load egress allow-list, deploying without it: "+eaerr.Error())
@@ -300,7 +300,9 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 			SQLite: m.Needs.SQLite,
 			// Admin-configured endpoint allow-list. Passed on every deploy so a
 			// redeploy can't silently drop rules an admin added since the last one.
-			EgressAllows: egressAllows,
+			EgressAllows:  egressAllows,
+			EgressEnforce: egressEnforce,
+			ProxyURL:      proxyURL,
 		}); err != nil {
 			r.fail(ctx, p.ID, "k8s_apply", err.Error())
 			return

@@ -141,6 +141,11 @@ type ApplyInput struct {
 	// EgressAllows are the project's admin-configured endpoint rules. Merged
 	// into the egress policy on top of the platform's own services.
 	EgressAllows []EgressAllow
+	// EgressEnforce drops the public catch-all from the egress policy.
+	EgressEnforce bool
+	// ProxyURL, when set, is injected as HTTP(S)_PROXY with a NO_PROXY for
+	// cluster and platform addresses.
+	ProxyURL string
 }
 
 // Litestream defaults — kept as package-level constants so the init / sidecar
@@ -226,7 +231,7 @@ func isPrivateOrLinkLocal(ip net.IP) bool {
 // rather than IPs are skipped — ipBlock can't express DNS names, and leaving
 // them to the catch-all rule errs toward availability rather than breaking a
 // service we failed to parse.
-func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string, extra []EgressAllow) error {
+func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string, extra []EgressAllow, enforce bool) error {
 	if len(d.platformServiceEndpoints) == 0 {
 		return nil
 	}
@@ -318,11 +323,16 @@ func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string, extra []
 		}
 	}
 	sort.Strings(except)
-	rules := []netv1.NetworkPolicyEgressRule{{
-		To: []netv1.NetworkPolicyPeer{{
-			IPBlock: &netv1.IPBlock{CIDR: "0.0.0.0/0", Except: except},
-		}},
-	}}
+	// enforce: no catch-all. The internet is reachable only through the egress
+	// proxy, whose address arrives in extra like any other endpoint rule.
+	var rules []netv1.NetworkPolicyEgressRule
+	if !enforce {
+		rules = append(rules, netv1.NetworkPolicyEgressRule{
+			To: []netv1.NetworkPolicyPeer{{
+				IPBlock: &netv1.IPBlock{CIDR: "0.0.0.0/0", Except: except},
+			}},
+		})
+	}
 	tcp := corev1.ProtocolTCP
 	udp := corev1.ProtocolUDP
 
@@ -401,8 +411,8 @@ func (d *Deployer) ensureEgressPolicy(ctx context.Context, slug string, extra []
 // SyncEgressPolicy rewrites just the egress policy. Used when an admin edits the
 // allow-list: the workload itself hasn't changed, so re-applying the Deployment
 // (and restarting the pod) to pick up a policy edit would be gratuitous.
-func (d *Deployer) SyncEgressPolicy(ctx context.Context, slug string, allows []EgressAllow) error {
-	return d.ensureEgressPolicy(ctx, slug, allows)
+func (d *Deployer) SyncEgressPolicy(ctx context.Context, slug string, allows []EgressAllow, enforce bool) error {
+	return d.ensureEgressPolicy(ctx, slug, allows, enforce)
 }
 
 // Apply creates or updates the Deployment, Service, Ingress, and Secret for a project.
@@ -413,7 +423,7 @@ func (d *Deployer) Apply(ctx context.Context, in ApplyInput) error {
 	// Reconciled on every deploy rather than only at namespace creation, so
 	// projects that predate the policy (or had it deleted by hand) get it back
 	// without an operator remembering to reapply it.
-	if err := d.ensureEgressPolicy(ctx, in.Slug, in.EgressAllows); err != nil {
+	if err := d.ensureEgressPolicy(ctx, in.Slug, in.EgressAllows, in.EgressEnforce); err != nil {
 		return fmt.Errorf("egress policy: %w", err)
 	}
 	if err := d.applySecret(ctx, in); err != nil {
@@ -600,6 +610,7 @@ func (d *Deployer) applyDeployment(ctx context.Context, in ApplyInput) error {
 		},
 	}
 
+	appContainer.Env = withProxyEnv(appContainer.Env, in.ProxyURL, d.noProxy())
 	podSpec := corev1.PodSpec{
 		Containers: []corev1.Container{appContainer},
 	}
@@ -1511,4 +1522,61 @@ func (d *Deployer) SyncPlatformAllowList(ctx context.Context, cidrs []string) er
 		clean = []string{denyAllCIDR}
 	}
 	return d.upsertAllowList(ctx, PlatformAllowListNamespace, "platform", PlatformAllowListName, clean)
+}
+
+var proxyEnvNames = []string{"HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy", "NO_PROXY", "no_proxy"}
+
+// noProxy keeps cluster, private and platform-hostname traffic off the proxy:
+// those are governed by the NetworkPolicy, and squid would deny them anyway.
+func (d *Deployer) noProxy() string {
+	return "localhost,127.0.0.1,.svc,.cluster.local,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,." + d.baseDomain
+}
+
+// withProxyEnv strips any proxy vars and, when proxyURL is set, adds them back.
+// Both spellings: Go/curl read upper case, many Python/Node libraries lower.
+func withProxyEnv(env []corev1.EnvVar, proxyURL, noProxy string) []corev1.EnvVar {
+	out := make([]corev1.EnvVar, 0, len(env)+6)
+	for _, e := range env {
+		skip := false
+		for _, n := range proxyEnvNames {
+			if e.Name == n {
+				skip = true
+			}
+		}
+		if !skip {
+			out = append(out, e)
+		}
+	}
+	if proxyURL == "" {
+		return out
+	}
+	return append(out,
+		corev1.EnvVar{Name: "HTTPS_PROXY", Value: proxyURL},
+		corev1.EnvVar{Name: "HTTP_PROXY", Value: proxyURL},
+		corev1.EnvVar{Name: "https_proxy", Value: proxyURL},
+		corev1.EnvVar{Name: "http_proxy", Value: proxyURL},
+		corev1.EnvVar{Name: "NO_PROXY", Value: noProxy},
+		corev1.EnvVar{Name: "no_proxy", Value: noProxy},
+	)
+}
+
+// SetProxyEnv rewrites the proxy env on the project's running Deployment
+// (a rollout). No Deployment yet is fine: the next Apply injects it.
+func (d *Deployer) SetProxyEnv(ctx context.Context, slug, proxyURL string) error {
+	api := d.cs.AppsV1().Deployments(d.namespaceFor(slug))
+	dep, err := api.Get(ctx, "app", metav1.GetOptions{})
+	if apierr.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for i := range dep.Spec.Template.Spec.Containers {
+		if dep.Spec.Template.Spec.Containers[i].Name == "app" {
+			c := &dep.Spec.Template.Spec.Containers[i]
+			c.Env = withProxyEnv(c.Env, proxyURL, d.noProxy())
+		}
+	}
+	_, err = api.Update(ctx, dep, metav1.UpdateOptions{})
+	return err
 }
