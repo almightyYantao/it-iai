@@ -1,17 +1,7 @@
-// Tiny clsx-like helper. Supports strings, falsy, and object form `{ "class": cond }`.
-type Part = string | number | false | null | undefined | Record<string, unknown>;
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
 
-export function cn(...parts: Part[]): string {
-  const out: string[] = [];
-  for (const p of parts) {
-    if (!p) continue;
-    if (typeof p === "string" || typeof p === "number") {
-      out.push(String(p));
-    } else if (typeof p === "object") {
-      for (const key of Object.keys(p)) {
-        if (p[key]) out.push(key);
-      }
-    }
-  }
-  return out.join(" ");
+// clsx + tailwind-merge: later classes win on conflict (w-64 overrides w-full).
+export function cn(...parts: ClassValue[]): string {
+  return twMerge(clsx(parts));
 }

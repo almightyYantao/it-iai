@@ -11,6 +11,11 @@ type Dict = Record<string, string>;
 const STORAGE_KEY = "iai.locale";
 
 const zh: Dict = {
+  "nav.language": "语言",
+  "ui.cancel": "取消",
+  "ui.confirm": "确认",
+  "el.searchproject": "搜索项目…",
+  "el.noproject": "没有匹配的项目",
   "nav.egresslogs": "出站日志",
   "el.title": "出站日志",
   "el.desc": "经出口代理的每一条请求，保留 30 天，每 10 秒刷新。只记录域名，不记录路径和参数。",
@@ -659,6 +664,11 @@ const zh: Dict = {
 };
 
 const en: Dict = {
+  "nav.language": "Language",
+  "ui.cancel": "Cancel",
+  "ui.confirm": "Confirm",
+  "el.searchproject": "Search projects…",
+  "el.noproject": "No matching project",
   "nav.egresslogs": "Egress logs",
   "el.title": "Egress logs",
   "el.desc": "Every request through the egress proxy, kept 30 days, refreshed every 10s. Hosts only, never paths or query strings.",

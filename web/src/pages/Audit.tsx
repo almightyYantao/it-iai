@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, LoadingRows } from "../components/States";
 import { Pagination, type PaginationState } from "../components/Pagination";
 import { ScrollIcon } from "../components/icons";
 import { timeAgo } from "../lib/format";
+import { Table, TBody, TD, TH, THead, TR } from "../components/ui";
 
 export function Audit() {
   const { t } = useI18n();
@@ -50,24 +51,23 @@ export function Audit() {
 
       {q.data && (q.data.entries?.length ?? 0) > 0 && (
         <>
-          <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-base">
-            <table className="min-w-full text-[13px]">
-              <thead className="bg-canvas-surface">
-                <tr className="text-left text-[12px] font-medium text-ink-muted">
-                  <th className="px-5 py-3 font-medium">{t("audit.col.when")}</th>
-                  <th className="px-5 py-3 font-medium">{t("audit.col.actor")}</th>
-                  <th className="px-5 py-3 font-medium">{t("audit.col.action")}</th>
-                  <th className="px-5 py-3 font-medium">{t("audit.col.project")}</th>
-                  <th className="px-5 py-3 font-medium">{t("audit.col.metadata")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line-subtle">
+          <Table>
+              <THead className="bg-canvas-surface">
+                <TR className="text-left text-[12px] font-medium text-ink-muted">
+                  <TH className="px-5 py-3 font-medium">{t("audit.col.when")}</TH>
+                  <TH className="px-5 py-3 font-medium">{t("audit.col.actor")}</TH>
+                  <TH className="px-5 py-3 font-medium">{t("audit.col.action")}</TH>
+                  <TH className="px-5 py-3 font-medium">{t("audit.col.project")}</TH>
+                  <TH className="px-5 py-3 font-medium">{t("audit.col.metadata")}</TH>
+                </TR>
+              </THead>
+              <TBody className="divide-y divide-line-subtle">
                 {q.data.entries.map((e) => (
-                  <tr key={e.id} className="align-top hover:bg-canvas-surface transition-colors">
-                    <td className="px-5 py-3.5 whitespace-nowrap text-ink-muted tabular-nums">
+                  <TR key={e.id} className="align-top hover:bg-canvas-surface transition-colors">
+                    <TD className="px-5 py-3.5 whitespace-nowrap text-ink-muted tabular-nums">
                       {timeAgo(e.created_at)}
-                    </td>
-                    <td className="px-5 py-3.5 whitespace-nowrap">
+                    </TD>
+                    <TD className="px-5 py-3.5 whitespace-nowrap">
                       <span className="text-[12px] text-ink-faint">
                         {e.actor_type}
                       </span>
@@ -84,19 +84,18 @@ export function Audit() {
                           {t("audit.actor.via", { token: e.actor_via })}
                         </div>
                       )}
-                    </td>
-                    <td className="px-5 py-3.5 font-mono text-[12px] text-status-flight-fg">{e.action}</td>
-                    <td className="px-5 py-3.5 font-mono text-[11.5px] text-ink-faint">
+                    </TD>
+                    <TD className="px-5 py-3.5 font-mono text-[12px] text-status-flight-fg">{e.action}</TD>
+                    <TD className="px-5 py-3.5 font-mono text-[11.5px] text-ink-faint">
                       {e.project_id ? e.project_id.slice(0, 8) : t("common.empty")}
-                    </td>
-                    <td className="px-5 py-3.5 font-mono text-[11.5px] text-ink-muted max-w-md break-all">
+                    </TD>
+                    <TD className="px-5 py-3.5 font-mono text-[11.5px] text-ink-muted max-w-md break-all">
                       {e.metadata || ""}
-                    </td>
-                  </tr>
+                    </TD>
+                  </TR>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TBody>
+            </Table>
           <Pagination state={pg} total={q.data.total ?? 0} onChange={setPg} />
         </>
       )}

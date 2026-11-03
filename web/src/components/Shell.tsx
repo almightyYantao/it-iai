@@ -8,6 +8,17 @@ import { useI18n } from "../lib/i18n";
 import { BrandMark, LogoutIcon } from "./icons";
 import { SkillBridge } from "./SkillBridge";
 import { ProxyDot } from "./EgressProxy";
+import {
+  Badge,
+  Button,
+  DropdownContent,
+  DropdownItem,
+  DropdownLabel,
+  DropdownMenu,
+  DropdownSeparator,
+  DropdownTrigger,
+  Tabs,
+} from "./ui";
 
 export function Shell() {
   const nav = useNavigate();
@@ -41,19 +52,38 @@ export function Shell() {
           <BrandMark className="size-5 text-ink-strong" />
           <span className="font-semibold tracking-tight text-ink-strong">爱 AI</span>
           <span className="text-line-strong">/</span>
-          <span className="rounded-full border border-line-subtle px-2 py-0.5 text-[11px] text-ink-muted">
+          <Badge className="text-[11px]">
             {isAdmin ? t("nav.role.admin") : t("nav.role.member")}
-          </span>
+          </Badge>
           <div className="flex-1" />
           {isAdmin && <ProxyDot />}
           <SkillBridge />
           <ThemeToggle />
-          <LangToggle locale={locale} setLocale={setLocale} />
-          <span className="hidden sm:block max-w-[180px] truncate text-[12.5px] text-ink-muted">{email}</span>
-          <button onClick={logout} title={t("nav.signout")}
-            className="rounded-md p-1.5 text-ink-muted hover:bg-canvas-raised hover:text-ink-strong transition-colors">
-            <LogoutIcon className="size-4" />
-          </button>
+          <DropdownMenu>
+            <DropdownTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label={email} className="rounded-full">
+                <span className="flex size-7 items-center justify-center rounded-full bg-canvas-raised text-[12px] font-semibold uppercase text-ink-strong">
+                  {(email || "?").slice(0, 1)}
+                </span>
+              </Button>
+            </DropdownTrigger>
+            <DropdownContent>
+              <DropdownLabel>
+                <div className="truncate text-[13px] font-medium text-ink-strong">{email}</div>
+                <div className="mt-0.5">{isAdmin ? t("nav.role.admin") : t("nav.role.member")}</div>
+              </DropdownLabel>
+              <DropdownSeparator />
+              <div className="flex items-center justify-between px-2.5 py-1.5">
+                <span className="text-[12px] text-ink-muted">{t("nav.language")}</span>
+                <LangToggle locale={locale} setLocale={setLocale} />
+              </div>
+              <DropdownSeparator />
+              <DropdownItem danger onSelect={logout}>
+                <LogoutIcon className="size-4" />
+                {t("nav.signout")}
+              </DropdownItem>
+            </DropdownContent>
+          </DropdownMenu>
         </div>
         <nav className="mx-auto flex w-full max-w-[1200px] gap-1 overflow-x-auto overflow-y-hidden px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <NavLink to="/" end className={tab}>{t("nav.overview")}</NavLink>
@@ -83,40 +113,26 @@ function ThemeToggle() {
     setDark(next);
   }
   return (
-    <button onClick={flip} aria-label="theme"
-      className="rounded-md p-1.5 text-ink-muted hover:bg-canvas-raised hover:text-ink-strong transition-colors">
+    <Button variant="ghost" size="icon" onClick={flip} aria-label="theme">
       {dark ? (
         <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" strokeLinecap="round"/></svg>
       ) : (
         <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" strokeLinejoin="round"/></svg>
       )}
-    </button>
+    </Button>
   );
 }
 
 function LangToggle({ locale, setLocale }: { locale: "zh" | "en"; setLocale: (l: "zh" | "en") => void }) {
   return (
-    <div className="inline-flex rounded-md border border-line-subtle bg-canvas-surface p-0.5 text-[10.5px] font-medium">
-      <button
-        onClick={() => setLocale("zh")}
-        className={cn(
-          "px-1.5 py-0.5 rounded transition-colors",
-          locale === "zh" ? "bg-canvas-raised text-ink-strong" : "text-ink-faint hover:text-ink",
-        )}
-        aria-label="中文"
-      >
-        中
-      </button>
-      <button
-        onClick={() => setLocale("en")}
-        className={cn(
-          "px-1.5 py-0.5 rounded transition-colors",
-          locale === "en" ? "bg-canvas-raised text-ink-strong" : "text-ink-faint hover:text-ink",
-        )}
-        aria-label="English"
-      >
-        EN
-      </button>
-    </div>
+    <Tabs
+      value={locale}
+      onChange={setLocale}
+      className="h-7"
+      options={[
+        { value: "zh", label: <span aria-label="中文" className="text-[11px]">中</span> },
+        { value: "en", label: <span aria-label="English" className="text-[11px]">EN</span> },
+      ]}
+    />
   );
 }

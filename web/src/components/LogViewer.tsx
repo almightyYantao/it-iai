@@ -5,6 +5,7 @@ import { copyText } from "../lib/clipboard";
 import { useI18n } from "../lib/i18n";
 import type { DeploymentEvent } from "../lib/types";
 import { ArrowDownIcon, ClipboardIcon, CheckIcon, FilterIcon } from "./icons";
+import { Button } from "./ui";
 
 const phaseColor: Record<string, string> = {
   queue:   "text-status-flight-dot",
@@ -92,23 +93,24 @@ export function LogViewer({
           {PHASES.map((p) => {
             const active = filter.size === 0 || filter.has(p);
             return (
-              <button
+              <Button
                 key={p}
+                variant="ghost"
                 onClick={() => togglePhase(p)}
                 className={cn(
-                  "px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors",
+                  "h-auto gap-0 px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors",
                   active ? "bg-canvas-raised text-ink" : "text-ink-faint hover:text-ink-muted",
                 )}
               >
                 <span className={cn("inline-block size-1.5 rounded-full mr-1.5 align-middle", phaseColor[p] ? phaseColor[p].replace("text-", "bg-") : "bg-ink-faint")} />
                 {p}
-              </button>
+              </Button>
             );
           })}
           {filter.size > 0 && (
-            <button onClick={() => setFilter(new Set())} className="px-2 py-0.5 rounded-full text-[11px] text-ink-faint hover:text-ink-muted">
+            <Button variant="ghost" onClick={() => setFilter(new Set())} className="h-auto px-2 py-0.5 rounded-full text-[11px] text-ink-faint hover:text-ink-muted">
               {t("log.clear")}
-            </button>
+            </Button>
           )}
         </div>
         <div className="ml-auto flex items-center gap-3">
@@ -124,10 +126,10 @@ export function LogViewer({
               </span>
             )}
           </span>
-          <button onClick={copyAll} className="inline-flex items-center gap-1 text-[11.5px] text-ink-faint hover:text-ink transition">
+          <Button variant="ghost" size="sm" onClick={copyAll} className="h-6 gap-1 px-1.5 text-[11.5px] text-ink-faint [&_svg]:size-3.5">
             {copied ? <CheckIcon className="size-3.5" /> : <ClipboardIcon className="size-3.5" />}
             {copied ? t("log.copied") : t("log.copy")}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -146,13 +148,14 @@ export function LogViewer({
       </div>
 
       {!atBottom && (
-        <button
+        <Button
+          size="sm"
           onClick={jumpToBottom}
-          className="absolute bottom-5 right-5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand text-canvas-base text-[12px] font-medium shadow-lg shadow-brand/30 hover:bg-brand-hover transition"
+          className="absolute bottom-5 right-5 rounded-full bg-brand text-canvas-base shadow-lg shadow-brand/30 hover:bg-brand-hover [&_svg]:size-3.5"
         >
           <ArrowDownIcon className="size-3.5" />
           {unread > 0 ? t("log.new", { count: unread }) : t("log.latest")}
-        </button>
+        </Button>
       )}
     </div>
   );

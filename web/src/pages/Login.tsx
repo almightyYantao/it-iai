@@ -5,6 +5,7 @@ import { api, ApiError, setToken } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { ErrorState } from "../components/States";
 import { BrandMark, KeycloakIcon } from "../components/icons";
+import { Button, Input, Label, Tabs } from "../components/ui";
 
 export function Login() {
   const nav = useNavigate();
@@ -16,10 +17,18 @@ export function Login() {
   const [oidc, setOidc] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch("/v1/auth/oidc-status")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setOidc(Boolean(d?.enabled)))
-      .catch(() => setOidc(false));
+    // Retry: a control-plane restart briefly 502s, and hiding SSO for good
+    // because the first probe landed in that window strands users.
+    let alive = true;
+    const probe = (n: number) =>
+      fetch("/v1/auth/oidc-status")
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then((d) => alive && setOidc(Boolean(d?.enabled)))
+        .catch(() => alive && (n > 0 ? setTimeout(() => probe(n - 1), 2000) : setOidc(false)));
+    probe(5);
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -73,19 +82,16 @@ export function Login() {
       />
 
       <div className="relative w-full max-w-[380px]">
-        <div className="absolute -top-1 right-0 inline-flex rounded-md border border-line-subtle bg-canvas-surface p-0.5 text-[10.5px] font-medium">
-          {(["zh", "en"] as const).map((lo) => (
-            <button
-              key={lo}
-              onClick={() => setLocale(lo)}
-              className={
-                "px-1.5 py-0.5 rounded transition-colors " +
-                (locale === lo ? "bg-canvas-raised text-ink-strong" : "text-ink-faint hover:text-ink")
-              }
-            >
-              {lo === "zh" ? "中" : "EN"}
-            </button>
-          ))}
+        <div className="absolute -top-1 right-0">
+          <Tabs
+            value={locale}
+            onChange={setLocale}
+            className="h-7"
+            options={(["zh", "en"] as const).map((lo) => ({
+              value: lo,
+              label: <span className="text-[11px]">{lo === "zh" ? "中" : "EN"}</span>,
+            }))}
+          />
         </div>
 
         <div className="flex items-center gap-2 mb-1">
@@ -97,8 +103,8 @@ export function Login() {
 
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <label className="text-[12px] text-ink-muted mb-1.5 block">{t("login.field.token")}</label>
-            <input
+            <Label className="text-[12px] font-normal text-ink-muted mb-1.5 block">{t("login.field.token")}</Label>
+            <Input
               type="password"
               autoComplete="off"
               required
@@ -106,17 +112,18 @@ export function Login() {
               onChange={(e) => setTok(e.target.value)}
               placeholder="vbd_live_..."
               autoFocus
-              className="w-full h-10 rounded-md bg-canvas-surface border border-line px-3 font-mono text-[13px] placeholder-ink-faint text-ink focus:outline-none focus:border-line-strong focus:ring-[3px] focus:ring-ink-strong/10 transition"
+              className="h-10 font-mono"
             />
           </div>
 
-          <button
+          <Button
             type="submit"
+            size="lg"
             disabled={busy || !token.trim()}
-            className="w-full h-10 rounded-md bg-brand hover:bg-brand-hover disabled:bg-canvas-raised disabled:text-ink-muted disabled:border disabled:border-line disabled:cursor-not-allowed text-canvas-base text-[13px] font-semibold transition"
+            className="w-full bg-brand hover:bg-brand-hover text-[13px] font-semibold"
           >
             {busy ? t("login.button.continue.busy") : t("login.button.continue")}
-          </button>
+          </Button>
 
           {oidc && (
             <>
@@ -128,13 +135,15 @@ export function Login() {
                   <span className="px-2 bg-canvas-base text-[12px] text-ink-faint">{t("login.or")}</span>
                 </div>
               </div>
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="lg"
                 onClick={loginWithKeycloak}
-                className="w-full h-10 rounded-md bg-canvas-surface hover:bg-canvas-raised border border-line text-[13px] font-medium text-ink-strong transition inline-flex items-center justify-center gap-2"
+                className="w-full gap-2 text-[13px]"
               >
                 <KeycloakIcon className="size-4 text-brand" /> {t("login.button.oidc")}
-              </button>
+              </Button>
             </>
           )}
 

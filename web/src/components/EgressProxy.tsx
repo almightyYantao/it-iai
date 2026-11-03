@@ -1,8 +1,10 @@
+import { confirmDialog } from "./ui/confirm";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { cn } from "../lib/cn";
+import { Badge, Button, Card } from "./ui";
 import { timeAgo } from "../lib/format";
 import type { EgressMode } from "../lib/types";
 
@@ -36,15 +38,14 @@ export function ProxyStatusCard() {
   const ok = !!p?.ready;
   const proxied = (d?.modes.observe ?? 0) + (d?.modes.enforce ?? 0);
   return (
-    <section className="mb-8 rounded-lg border border-line-subtle bg-canvas-base p-5">
+    <Card className="mb-8 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <span className={cn("size-2.5 rounded-full", !d ? "bg-ink-faint" : ok ? "bg-status-ok-dot" : "bg-status-fail-dot animate-pulse")} />
           <h2 className="text-[15px] font-semibold text-ink-strong">{t("ep.title")}</h2>
-          <span className={cn("rounded-full px-2 py-0.5 text-[11.5px] font-medium",
-            ok ? "bg-status-ok-bg text-status-ok-fg" : "bg-status-fail-bg text-status-fail-fg")}>
+          <Badge variant={ok ? "success" : "danger"}>
             {!d ? "…" : ok ? t("ep.running") : p?.reason || p?.phase}
-          </span>
+          </Badge>
         </div>
         {d && <span className="text-[12px] text-ink-faint">{t("ep.checked", { ago: timeAgo(d.checked_at) })}</span>}
       </div>
@@ -60,7 +61,7 @@ export function ProxyStatusCard() {
       )}
       {p?.last_error && !ok && <p className="mt-3 font-mono text-[12px] text-status-fail-fg">{t("ep.lasterr")}: {p.last_error}</p>}
       {p?.config_hash && <p className="mt-3 font-mono text-[11.5px] text-ink-faint">config {p.config_hash}</p>}
-    </section>
+    </Card>
   );
 }
 
@@ -90,9 +91,9 @@ export function EgressModePanel({ slug, notify }: { slug: string; notify: (ok: b
     onError: (e) => notify(false, e instanceof ApiError ? e.message : String(e)),
   });
   const cur = q.data?.mode ?? "off";
-  function pick(m: EgressMode) {
+  async function pick(m: EgressMode) {
     if (m === cur) return;
-    if (!confirm(t(`ep.mode.confirm.${m}`))) return;
+    if (!(await confirmDialog({ title: t(`ep.mode.${m}`), description: t(`ep.mode.confirm.${m}`), danger: m === "enforce" }))) return;
     set.mutate(m);
   }
   const domains = rep.data?.domains ?? [];
@@ -104,13 +105,12 @@ export function EgressModePanel({ slug, notify }: { slug: string; notify: (ok: b
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {MODES.map((m) => (
-          <button key={m} disabled={set.isPending || !q.data?.can_edit} onClick={() => pick(m)}
-            className={cn("rounded-md border px-3 py-2.5 text-left transition",
-              cur === m ? "border-ink-strong bg-canvas-surface" : "border-line-subtle hover:border-line",
-              (set.isPending || !q.data?.can_edit) && "cursor-not-allowed opacity-60")}>
+          <Button key={m} variant="secondary" disabled={set.isPending || !q.data?.can_edit} onClick={() => pick(m)}
+            className={cn("block h-auto px-3 py-2.5 text-left font-normal whitespace-normal disabled:opacity-60",
+              cur === m ? "border-ink-strong bg-canvas-surface" : "border-line-subtle hover:border-line")}>
             <div className="text-[12.5px] font-medium text-ink-strong">{t(`ep.mode.${m}`)}</div>
             <div className="mt-0.5 text-[11px] text-ink-muted">{t(`ep.mode.${m}.hint`)}</div>
-          </button>
+          </Button>
         ))}
       </div>
       {cur !== "off" && (

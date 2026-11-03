@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { useI18n } from "../lib/i18n";
 import { AlertIcon } from "./icons";
+import { Alert, Button, Skeleton } from "./ui";
 
 export function EmptyState({
   title,
@@ -37,10 +38,10 @@ export function LoadingRows({ rows = 5, cols = 4 }: { rows?: number; cols?: numb
           )}
         >
           {Array.from({ length: cols }).map((_, j) => (
-            <div
+            <Skeleton
               key={j}
               className={cn(
-                "h-3 rounded bg-canvas-raised animate-pulse",
+                "h-3 rounded",
                 j === 0 && "w-40",
                 j === 1 && "w-24 ml-2",
                 j === 2 && "w-16",
@@ -63,17 +64,18 @@ export function ErrorState({
 }) {
   const { t } = useI18n();
   return (
-    <div className="rounded-lg border border-status-fail-fg/30 bg-status-fail-bg/40 px-4 py-3 text-[13px] text-status-fail-fg flex items-start gap-3">
-      <AlertIcon className="size-4 mt-0.5 shrink-0" />
-      <div className="flex-1">{message}</div>
-      {onRetry && (
-        <button
-          onClick={onRetry}
-          className="text-status-fail-fg/80 hover:text-status-fail-fg underline-offset-2 hover:underline"
-        >
+    <Alert
+      variant="danger"
+      action={onRetry && (
+        <Button variant="destructive-ghost" size="sm" onClick={onRetry}>
           {t("common.retry")}
-        </button>
+        </Button>
       )}
-    </div>
+    >
+      <div className="flex items-start gap-3">
+        <AlertIcon className="size-4 mt-0.5 shrink-0" />
+        <div className="flex-1">{message}</div>
+      </div>
+    </Alert>
   );
 }

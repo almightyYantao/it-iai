@@ -3,11 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
-import { cn } from "../lib/cn";
 import { timeAgo } from "../lib/format";
 import { PageContainer, PageHeader } from "../components/Page";
 import { ErrorState, LoadingRows } from "../components/States";
 import type { SystemSettings } from "../lib/types";
+import { Alert, Badge, Button, Card, Input, Label } from "../components/ui";
 
 const SECRET_PLACEHOLDER = "********";
 
@@ -130,41 +130,21 @@ export function Settings() {
         actions={
           <div className="flex items-center gap-2">
             {dirty && (
-              <button
-                onClick={() => setDraft({})}
-                className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink transition-colors"
-              >
+              <Button variant="ghost" onClick={() => setDraft({})}>
                 {t("settings.button.reset")}
-              </button>
+              </Button>
             )}
-            <button
-              disabled={!dirty || save.isPending}
-              onClick={() => save.mutate(draft)}
-              className={cn(
-                "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
-                dirty && !save.isPending
-                  ? "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
-                  : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
-              )}
-            >
+            <Button disabled={!dirty || save.isPending} onClick={() => save.mutate(draft)}>
               {save.isPending ? t("settings.button.save.busy") : t("settings.button.save")}
-            </button>
+            </Button>
           </div>
         }
       />
 
       {toast && (
-        <div
-          className={cn(
-            "mb-6 rounded-md border px-4 py-2.5 text-[12.5px]",
-            toast.kind === "ok"
-              ? "border-status-ok-fg/30 bg-status-ok-bg/40 text-status-ok-fg"
-              : "border-status-fail-fg/30 bg-status-fail-bg/40 text-status-fail-fg",
-          )}
-          role="status"
-        >
+        <Alert variant={toast.kind === "ok" ? "success" : "danger"} className="mb-6 text-[12.5px]">
           {toast.msg}
-        </div>
+        </Alert>
       )}
 
       <Section title={t("settings.section.kc.title")} description={t("settings.section.kc.desc")}>
@@ -226,9 +206,7 @@ function Section({
         <h2 className="text-[15px] font-medium text-ink-strong">{title}</h2>
         <p className="mt-1.5 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">{description}</p>
       </header>
-      <div className="rounded-lg border border-line-subtle bg-canvas-base divide-y divide-line-subtle">
-        {children}
-      </div>
+      <Card className="divide-y divide-line-subtle">{children}</Card>
     </section>
   );
 }
@@ -268,18 +246,14 @@ function Field({
   return (
     <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-[200px_1fr] gap-x-6 gap-y-1.5">
       <div className="pt-1.5">
-        <label htmlFor={`f-${field}`} className="block text-[12.5px] font-medium text-ink">
+        <Label htmlFor={`f-${field}`} className="block text-[12.5px]">
           {label}
-        </label>
+        </Label>
         <div className="mt-1.5 flex items-center gap-1.5">
           {dbMeta?.has_override ? (
-            <span className="inline-flex items-center rounded-full bg-canvas-raised text-ink-strong px-1.5 py-0.5 text-[10px] font-medium">
-              {t("settings.badge.db")}
-            </span>
+            <Badge variant="solid" className="px-1.5 text-[10px]">{t("settings.badge.db")}</Badge>
           ) : (
-            <span className="inline-flex items-center rounded-full bg-canvas-raised text-ink-faint px-1.5 py-0.5 text-[10px] font-medium">
-              {t("settings.badge.env")}
-            </span>
+            <Badge className="px-1.5 text-[10px] text-ink-faint">{t("settings.badge.env")}</Badge>
           )}
           {dbMeta?.updated_at && (
             <span className="text-[10.5px] text-ink-faint" title={dbMeta.updated_at}>
@@ -289,7 +263,7 @@ function Field({
         </div>
       </div>
       <div>
-        <input
+        <Input
           id={`f-${field}`}
           type={inputType}
           value={inputValue}
@@ -297,7 +271,7 @@ function Field({
           spellCheck={false}
           autoComplete="off"
           onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
+          className="font-mono"
         />
         {hint && <p className="mt-1.5 text-[11.5px] text-ink-muted leading-relaxed">{hint}</p>}
       </div>

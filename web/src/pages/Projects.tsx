@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, LoadingRows } from "../components/States";
 import { Pagination, type PaginationState } from "../components/Pagination";
 import { ExternalIcon, LayersIcon } from "../components/icons";
 import { timeAgo } from "../lib/format";
+import { Card } from "../components/ui";
 
 type Scope = "all" | "mine";
 
@@ -90,10 +91,10 @@ export function Projects() {
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {q.data.projects.map((p) => (
-              <div
+              <Card
                 key={p.id}
                 onClick={() => nav(`/projects/${p.slug}`)}
-                className="group cursor-pointer rounded-lg border border-line-subtle bg-canvas-base p-5 transition-all hover:border-line-strong hover:shadow-raised"
+                className="group cursor-pointer p-5 transition-all hover:border-line-strong hover:shadow-raised"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -129,7 +130,7 @@ export function Projects() {
                 <div className="mt-3 border-t border-line-subtle pt-3 text-[12px] text-ink-faint">
                   <OwnerCell email={p.owner_email} />
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
           <Pagination state={pg} total={q.data.total ?? 0} onChange={setPg} />

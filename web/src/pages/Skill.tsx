@@ -8,6 +8,7 @@ import { cn } from "../lib/cn";
 import { copyText } from "../lib/clipboard";
 import { getToken } from "../lib/api";
 import { CheckIcon, ClipboardIcon, SparklesIcon, TerminalIcon } from "../components/icons";
+import { Badge, Button, Card, Table, TBody, TD, TH, THead, TR } from "../components/ui";
 
 // Skill tutorial — quickstart that surfaces inside the admin console so a
 // teammate can self-serve installing and using the Skill without leaving
@@ -95,7 +96,7 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
       {/* Quickstart: one-liner installer. Surfaced above the long-form tutorial
           because most users just want the happy path — the manual steps remain
           underneath for anyone who needs to understand what the installer does. */}
-      <section className="mb-10 rounded-lg border border-ink-strong/30 bg-canvas-surface px-6 py-5">
+      <Card className="mb-10 border-ink-strong/30 bg-canvas-surface px-6 py-5">
         <div className="flex items-center gap-2 text-[12px] text-brand font-semibold mb-2">
           <SparklesIcon className="size-3.5" />
           {t("skill.quickstart.label")}
@@ -109,10 +110,10 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
         <p className="text-[11.5px] text-ink-muted mt-3 leading-relaxed">
           {t("skill.quickstart.hint")}
         </p>
-      </section>
+      </Card>
 
       {/* Prereqs */}
-      <section className="mb-12 rounded-lg border border-line-subtle bg-canvas-base px-6 py-5">
+      <Card className="mb-12 px-6 py-5">
         <div className="flex items-center gap-2 text-[12px] font-medium text-ink-muted mb-3">
           <SparklesIcon className="size-3.5" />
           {t("skill.prereq.title")}
@@ -122,7 +123,7 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
           <PrereqItem>{t("skill.prereq.deps")}</PrereqItem>
           <PrereqItem>{t("skill.prereq.repo")}</PrereqItem>
         </ul>
-      </section>
+      </Card>
 
       {/* Step 1: Clone + Install */}
       <Step label={t("skill.step1.label")} title={t("skill.step1.title")}>
@@ -141,33 +142,32 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
         <div>
           <h3 className="text-[13.5px] font-medium text-ink-strong mb-1">{t("skill.step1.link.title")}</h3>
           <p className="text-[12.5px] text-ink-muted mb-3">{t("skill.step1.link.intro")}</p>
-          <div className="rounded-lg border border-line-subtle bg-canvas-base overflow-hidden mb-4">
+          <Card className="overflow-hidden mb-4">
             <div className="flex border-b border-line-subtle">
               {tabMeta.map((m) => (
-                <button
+                <Button
                   key={m.value}
+                  variant="ghost"
                   onClick={() => setTab(m.value)}
                   className={cn(
-                    "flex-1 px-5 py-3 text-left text-[13px] transition-colors border-r border-line-subtle last:border-r-0",
+                    "h-auto flex-1 flex-col items-stretch gap-0 whitespace-normal rounded-none font-normal px-5 py-3 text-left text-[13px] transition-colors border-r border-line-subtle last:border-r-0",
                     tab === m.value ? "bg-canvas-base text-ink-strong" : "text-ink-muted hover:text-ink",
                   )}
                 >
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="font-medium">{m.title}</span>
                     {m.tag && (
-                      <span className="rounded-full bg-status-flight-bg text-status-flight-fg px-1.5 py-0.5 text-[10px] font-medium">
-                        {m.tag}
-                      </span>
+                      <Badge variant="info" className="px-1.5 text-[10px]">{m.tag}</Badge>
                     )}
                   </div>
                   <div className="text-[12px] text-ink-faint leading-snug">{m.desc}</div>
-                </button>
+                </Button>
               ))}
             </div>
             <div className="p-4">
               <CodeBlock code={installSnippet[tab]} title="bash" />
             </div>
-          </div>
+          </Card>
 
           <div className="mt-5">
             <div className="text-[12px] text-ink-faint font-medium mb-2">
@@ -190,20 +190,22 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
               ~/.zshrc · ~/.bashrc
             </div>
             <div className="flex items-center gap-3">
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setRevealToken((v) => !v)}
-                className="text-[11.5px] text-ink-faint hover:text-ink transition-colors"
+                className="h-6 px-1.5 text-[11.5px] text-ink-faint"
               >
                 {revealToken ? t("skill.step2.hide") : t("skill.step2.reveal")}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 onClick={() => copy("shell")}
                 disabled={!token}
-                className="inline-flex items-center gap-1 text-[11.5px] text-ink-faint hover:text-ink transition disabled:opacity-50"
+                className="h-6 gap-1 px-1.5 text-[11.5px] text-ink-faint [&_svg]:size-3"
               >
                 {copied === "shell" ? <CheckIcon className="size-3" /> : <ClipboardIcon className="size-3" />}
                 {copied === "shell" ? t("skill.step2.copied") : t("skill.step2.copy")}
-              </button>
+              </Button>
             </div>
           </div>
           <pre className="px-4 py-3 font-mono text-[12.5px] leading-[1.7] text-ink overflow-x-auto selection:bg-brand/30">
@@ -218,13 +220,14 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
           <p className="text-[12.5px] text-ink-muted mb-2">{t("skill.step2.verify.desc")}</p>
           <div className="rounded-lg border border-line-subtle bg-canvas-inset overflow-hidden">
             <div className="flex items-center justify-end px-4 py-2 border-b border-line-subtle/70 bg-canvas-surface">
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => copy("verify")}
-                className="inline-flex items-center gap-1 text-[11.5px] text-ink-faint hover:text-ink transition"
+                className="h-6 gap-1 px-1.5 text-[11.5px] text-ink-faint [&_svg]:size-3"
               >
                 {copied === "verify" ? <CheckIcon className="size-3" /> : <ClipboardIcon className="size-3" />}
                 {copied === "verify" ? t("skill.step2.copied") : t("skill.step2.copy")}
-              </button>
+              </Button>
             </div>
             <pre className="px-4 py-3 font-mono text-[12.5px] leading-[1.7] text-ink overflow-x-auto selection:bg-brand/30">
               <code>{verifyCmd}</code>
@@ -239,7 +242,7 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
       <Step label={t("skill.step3.label")} title={t("skill.step3.title")}>
         <p className="text-[13.5px] text-ink-muted leading-relaxed mb-4">{t("skill.step3.intro")}</p>
 
-        <div className="rounded-lg border border-line-subtle bg-canvas-base p-2 space-y-1">
+        <Card className="p-2 space-y-1">
           {[
             t("skill.step3.example1"),
             t("skill.step3.example2"),
@@ -256,7 +259,7 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
               <span className="text-[13.5px] text-ink">{line}</span>
             </div>
           ))}
-        </div>
+        </Card>
       </Step>
 
       {/* Command reference */}
@@ -264,24 +267,22 @@ cp -r ${REPO_DIR} ~/.claude/skills/iai`,
         <h2 className="text-[15px] font-semibold text-ink-strong mb-1">{t("skill.commands.title")}</h2>
         <p className="text-[13px] text-ink-muted mb-4">{t("skill.commands.intro")}</p>
 
-        <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-base">
-          <table className="min-w-full text-[13px]">
-            <thead className="bg-canvas-surface">
-              <tr className="text-left text-[12px] font-medium text-ink-muted">
-                <th className="px-5 py-3 font-medium w-[28%]">{t("skill.commands.col.cmd")}</th>
-                <th className="px-5 py-3 font-medium">{t("skill.commands.col.desc")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line-subtle">
+        <Table>
+            <THead className="bg-canvas-surface">
+              <TR className="text-left text-[12px] font-medium text-ink-muted">
+                <TH className="px-5 py-3 font-medium w-[28%]">{t("skill.commands.col.cmd")}</TH>
+                <TH className="px-5 py-3 font-medium">{t("skill.commands.col.desc")}</TH>
+              </TR>
+            </THead>
+            <TBody className="divide-y divide-line-subtle">
               <CmdRow cmd="deploy +push" desc={t("skill.commands.row.push")} />
               <CmdRow cmd="deploy +status" desc={t("skill.commands.row.status")} />
               <CmdRow cmd="deploy +logs [-f]" desc={t("skill.commands.row.logs")} />
               <CmdRow cmd="deploy +list" desc={t("skill.commands.row.list")} />
               <CmdRow cmd="deploy +share add|remove EMAIL" desc={t("skill.commands.row.share")} />
               <CmdRow cmd="deploy +whoami" desc={t("skill.commands.row.whoami")} />
-            </tbody>
-          </table>
-        </div>
+            </TBody>
+          </Table>
       </section>
 
       {/* Power moves */}
@@ -320,18 +321,15 @@ redis = false`}
       </section>
 
       {/* CTA */}
-      <section className="rounded-lg border border-line-strong bg-status-flight-bg/30 px-6 py-5">
+      <Card className="border-line-strong bg-status-flight-bg/30 px-6 py-5">
         <h2 className="text-[15px] font-semibold text-ink-strong mb-1">{t("skill.cta.title")} →</h2>
         <p className="text-[13.5px] text-ink">{t("skill.cta.body")}</p>
         <div className="mt-3 flex items-center gap-3">
-          <Link
-            to="/projects"
-            className="inline-flex items-center gap-1.5 rounded-md bg-brand hover:bg-brand-hover px-3 py-1.5 text-[12.5px] font-medium text-canvas-base transition"
-          >
-            {t("nav.projects")} →
-          </Link>
+          <Button asChild size="sm" className="bg-brand hover:bg-brand-hover text-[12.5px]">
+            <Link to="/projects">{t("nav.projects")} →</Link>
+          </Button>
         </div>
-      </section>
+      </Card>
     </PageContainer>
   );
 }
@@ -340,9 +338,7 @@ function Step({ label, title, children }: { label: string; title: string; childr
   return (
     <section className="mb-12 grid grid-cols-[auto_1fr] gap-x-6">
       <div className="pt-0.5">
-        <div className="rounded-full bg-canvas-raised text-[12px] text-ink-muted font-medium px-2.5 py-1 inline-flex items-center">
-          {label}
-        </div>
+        <Badge className="border-0 bg-canvas-raised px-2.5 py-1 text-[12px]">{label}</Badge>
       </div>
       <div>
         <h2 className="text-[18px] font-semibold text-ink-strong mb-3">{title}</h2>
@@ -363,12 +359,12 @@ function PrereqItem({ children }: { children: React.ReactNode }) {
 
 function CmdRow({ cmd, desc }: { cmd: string; desc: string }) {
   return (
-    <tr className="hover:bg-canvas-raised/40 transition-colors">
-      <td className="px-5 py-3 align-top">
+    <TR className="hover:bg-canvas-raised/40 transition-colors">
+      <TD className="px-5 py-3 align-top">
         <InlineCode>{cmd}</InlineCode>
-      </td>
-      <td className="px-5 py-3 text-ink-muted">{desc}</td>
-    </tr>
+      </TD>
+      <TD className="px-5 py-3 text-ink-muted">{desc}</TD>
+    </TR>
   );
 }
 

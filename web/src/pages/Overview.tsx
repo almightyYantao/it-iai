@@ -7,6 +7,7 @@ import { useI18n } from "../lib/i18n";
 import { PageContainer, PageHeader } from "../components/Page";
 import { HealthBar, Legend, Tile } from "../components/Tile";
 import { ErrorState, LoadingRows } from "../components/States";
+import { Card } from "../components/ui";
 
 export function Overview() {
   const { t } = useI18n();
@@ -33,7 +34,7 @@ export function Overview() {
 
       {m.data && (
         <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-12 lg:col-span-7 rounded-lg border border-line-subtle bg-canvas-base transition-colors hover:border-line px-6 py-5">
+          <Card className="col-span-12 lg:col-span-7 transition-colors hover:border-line px-6 py-5">
             <div className="text-[13px] text-ink-muted font-medium">
               {t("overview.health.label")}
             </div>
@@ -91,7 +92,7 @@ export function Overview() {
                 </ul>
               )}
             </div>
-          </div>
+          </Card>
 
           <div className="col-span-12 lg:col-span-5 grid grid-rows-3 gap-4">
             <Tile

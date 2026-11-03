@@ -1,3 +1,4 @@
+import { confirmDialog } from "../components/ui/confirm";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -7,7 +8,7 @@ import { cn } from "../lib/cn";
 import { timeAgo } from "../lib/format";
 import { PageContainer, PageHeader } from "../components/Page";
 import { ErrorState, LoadingRows } from "../components/States";
-import { btn, input } from "../components/ui";
+import { Alert, Badge, Button, Card, CardBody, Input, Textarea } from "../components/ui";
 import type { CIDRPreset } from "../lib/types";
 
 // Access presets: card list → one-entry-per-row editor with notes, inline
@@ -56,28 +57,27 @@ export function Presets() {
         title={t("pp.title")}
         description={t("pp.desc")}
         actions={
-          <button className={cn(btn.base, btn.primary)} onClick={() => setEditing("new")}>
+          <Button onClick={() => setEditing("new")}>
             + {t("pp.new")}
-          </button>
+          </Button>
         }
       />
       {q.error && <ErrorState message={(q.error as Error).message} onRetry={() => q.refetch()} />}
       {q.isLoading && <LoadingRows rows={2} cols={3} />}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {presets.map((p) => (
-          <button
+          <Button
             key={p.name}
+            variant="secondary"
             onClick={() => setEditing(p)}
-            className="group rounded-lg border border-line-subtle bg-canvas-base p-5 text-left transition-all hover:border-line-strong hover:shadow-raised"
+            className="group block h-auto whitespace-normal rounded-lg border-line-subtle p-5 text-left font-normal transition-all hover:border-line-strong hover:bg-canvas-base hover:shadow-raised"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-[15px] font-semibold text-ink-strong">{p.label}</span>
                   {p.is_system && (
-                    <span className="rounded-full border border-line-subtle px-2 py-0.5 text-[11px] text-ink-muted">
-                      {t("pp.system")}
-                    </span>
+                    <Badge>{t("pp.system")}</Badge>
                   )}
                 </div>
                 <div className="mt-0.5 font-mono text-[12px] text-ink-faint">{p.name}</div>
@@ -90,7 +90,7 @@ export function Presets() {
               <Stat label={t("pp.stat.projects")} value={p.project_count ?? 0} />
               <Stat label={t("pp.stat.updated")} value={timeAgo(p.updated_at)} small />
             </div>
-          </button>
+          </Button>
         ))}
       </div>
     </PageContainer>
@@ -209,9 +209,9 @@ function PresetEditor({ preset, onClose }: { preset: CIDRPreset | null; onClose:
 
   return (
     <div className="animate-fade-in">
-      <button onClick={onClose} className="mb-4 text-[13px] text-ink-muted hover:text-ink-strong">
+      <Button variant="ghost" size="sm" onClick={onClose} className="mb-4 -ml-2.5">
         ← {t("pp.back")}
-      </button>
+      </Button>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-ink-strong">
@@ -225,83 +225,87 @@ function PresetEditor({ preset, onClose }: { preset: CIDRPreset | null; onClose:
         </div>
         <div className="flex gap-2">
           {!isNew && !preset!.is_system && (
-            <button
-              className={cn(btn.base, btn.ghost, "hover:text-status-fail-fg")}
-              onClick={() => confirm(t("pp.delete.confirm", { label: preset!.label })) && del.mutate()}
+            <Button
+              variant="destructive-ghost"
+              onClick={async () => (await confirmDialog({ title: t("pp.delete.confirm", { label: preset!.label }), danger: true })) && del.mutate()}
             >
               {t("pp.delete")}
-            </button>
+            </Button>
           )}
-          <button className={cn(btn.base, btn.secondary)} onClick={onClose}>{t("pp.cancel")}</button>
-          <button
-            className={cn(btn.base, btn.primary)}
+          <Button variant="secondary" onClick={onClose}>{t("pp.cancel")}</Button>
+          <Button
             disabled={!dirty || !valid || emptyInternal}
             onClick={() => setConfirming(true)}
           >
             {t("pp.review")}
-          </button>
+          </Button>
         </div>
       </div>
 
-      {err && <div className="mb-4 rounded-md border border-status-fail-dot/30 bg-status-fail-bg px-4 py-2.5 text-[13px] text-status-fail-fg">{err}</div>}
+      {err && <Alert variant="danger" className="mb-4">{err}</Alert>}
       {dupIds.size > 0 && (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-md bg-status-warn-bg px-4 py-2.5 text-[13px] text-status-warn-fg">
-          <span>{t("pp.dup.banner", { n: String(dupIds.size) })}</span>
-          <button className={cn(btn.base, btn.secondary)} onClick={() => setRows((rs) => rs.filter((r) => !dupIds.has(r.id)))}>
-            {t("pp.dup.fix")}
-          </button>
-        </div>
+        <Alert
+          variant="warning"
+          className="mb-4"
+          action={
+            <Button variant="secondary" onClick={() => setRows((rs) => rs.filter((r) => !dupIds.has(r.id)))}>
+              {t("pp.dup.fix")}
+            </Button>
+          }
+        >
+          {t("pp.dup.banner", { n: String(dupIds.size) })}
+        </Alert>
       )}
       {hardErrors > 0 && (
-        <div className="mb-4 rounded-md bg-status-fail-bg px-4 py-2.5 text-[13px] text-status-fail-fg">{t("pp.err.banner", { n: String(hardErrors) })}</div>
+        <Alert variant="danger" className="mb-4">{t("pp.err.banner", { n: String(hardErrors) })}</Alert>
       )}
-      {emptyInternal && <div className="mb-4 rounded-md bg-status-warn-bg px-4 py-2.5 text-[13px] text-status-warn-fg">{t("pp.warn.emptyInternal")}</div>}
+      {emptyInternal && <Alert variant="warning" className="mb-4">{t("pp.warn.emptyInternal")}</Alert>}
 
       {/* Basics */}
-      <section className="mb-6 rounded-lg border border-line-subtle p-5">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <Card className="mb-6">
+        <CardBody className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2">
           {isNew && (
             <Labeled label={t("pp.f.name")} hint={t("pp.f.name.hint")} bad={name !== "" && !SLUG_RE.test(name)}>
-              <input className={cn(input, "font-mono")} value={name} placeholder="sg-office" onChange={(e) => setName(e.target.value.toLowerCase())} />
+              <Input className="font-mono" value={name} placeholder="sg-office" onChange={(e) => setName(e.target.value.toLowerCase())} />
             </Labeled>
           )}
           <Labeled label={t("pp.f.label")}>
-            <input className={input} value={label} placeholder={t("pp.f.label.ph")} onChange={(e) => setLabel(e.target.value)} />
+            <Input value={label} placeholder={t("pp.f.label.ph")} onChange={(e) => setLabel(e.target.value)} />
           </Labeled>
           <div className="md:col-span-2">
             <Labeled label={t("pp.f.desc")}>
-              <input className={input} value={desc} onChange={(e) => setDesc(e.target.value)} />
+              <Input value={desc} onChange={(e) => setDesc(e.target.value)} />
             </Labeled>
           </div>
-        </div>
-      </section>
+        </CardBody>
+      </Card>
 
       {/* Entries */}
-      <section className="rounded-lg border border-line-subtle">
+      <Card>
         <div className="flex flex-wrap items-center gap-2 border-b border-line-subtle p-3">
           <div className="text-[14px] font-semibold text-ink-strong px-2">
             {t("pp.entries")} <span className="ml-1 font-normal text-ink-muted tabular-nums">{finalCidrs.length}</span>
           </div>
           <div className="flex-1" />
-          <input className={cn(input, "w-56 h-8")} placeholder={t("pp.search")} value={filter} onChange={(e) => setFilter(e.target.value)} />
-          <button className={cn(btn.base, btn.secondary)} onClick={() => setShowPaste((v) => !v)}>{t("pp.paste")}</button>
-          <button className={cn(btn.base, btn.primary)} onClick={() => setRows((rs) => [{ id: rid++, cidr: "", note: "" }, ...rs])}>+ {t("pp.add")}</button>
+          <Input className="w-56 h-8" placeholder={t("pp.search")} value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <Button variant="secondary" onClick={() => setShowPaste((v) => !v)}>{t("pp.paste")}</Button>
+          <Button onClick={() => setRows((rs) => [{ id: rid++, cidr: "", note: "" }, ...rs])}>+ {t("pp.add")}</Button>
         </div>
 
         {showPaste && (
           <div className="border-b border-line-subtle bg-canvas-surface p-4">
             <p className="mb-2 text-[12.5px] text-ink-muted">{t("pp.paste.hint")}</p>
-            <textarea
+            <Textarea
               autoFocus
               rows={10}
-              className="block w-full min-h-[220px] resize-y rounded-md border border-line bg-canvas-base px-3 py-2.5 font-mono text-[12.5px] leading-6 text-ink-strong placeholder:text-ink-faint focus:outline-none focus:border-line-strong focus:ring-[3px] focus:ring-ink-strong/10"
+              className="block min-h-[220px] py-2.5 font-mono text-[12.5px]"
               placeholder={"101.47.4.16 Meegle 新加坡\n10.0.0.0/8, 内网"}
               value={paste}
               onChange={(e) => setPaste(e.target.value)}
             />
             <div className="mt-2 flex justify-end gap-2">
-              <button className={cn(btn.base, btn.ghost)} onClick={() => setShowPaste(false)}>{t("pp.cancel")}</button>
-              <button className={cn(btn.base, btn.primary)} disabled={!paste.trim()} onClick={addPasted}>{t("pp.paste.add")}</button>
+              <Button variant="ghost" onClick={() => setShowPaste(false)}>{t("pp.cancel")}</Button>
+              <Button disabled={!paste.trim()} onClick={addPasted}>{t("pp.paste.add")}</Button>
             </div>
           </div>
         )}
@@ -317,28 +321,31 @@ function PresetEditor({ preset, onClose }: { preset: CIDRPreset | null; onClose:
             return (
               <div key={r.id} className={cn("group grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_40px] items-start gap-3 px-4 py-2", isNewRow && !isNew && "bg-status-ok-bg/40")}>
                 <div>
-                  <input
-                    className={cn(input, "h-8 font-mono text-[12.5px]", prob && "border-status-fail-dot focus:border-status-fail-dot")}
+                  <Input
+                    className="h-8 font-mono text-[12.5px]"
+                    aria-invalid={prob ? true : undefined}
                     value={r.cidr}
                     placeholder="1.2.3.4 或 10.0.0.0/8"
                     onChange={(e) => update(r.id, { cidr: e.target.value })}
                   />
                   {prob && <p className="mt-1 text-[11.5px] text-status-fail-fg">{prob}</p>}
                 </div>
-                <input className={cn(input, "h-8")} value={r.note} placeholder={t("pp.note.ph")} onChange={(e) => update(r.id, { note: e.target.value })} />
-                <button
+                <Input className="h-8" value={r.note} placeholder={t("pp.note.ph")} onChange={(e) => update(r.id, { note: e.target.value })} />
+                <Button
+                  variant="destructive-ghost"
+                  size="icon"
                   title={t("pp.delete")}
                   onClick={() => setRows((rs) => rs.filter((x) => x.id !== r.id))}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-ink-faint opacity-60 hover:bg-status-fail-bg hover:text-status-fail-fg group-hover:opacity-100"
+                  className="text-ink-faint opacity-60 group-hover:opacity-100"
                 >
                   ✕
-                </button>
+                </Button>
               </div>
             );
           })}
           {shown.length === 0 && <div className="px-4 py-10 text-center text-[13px] text-ink-faint">{filter ? t("pp.nomatch") : t("pp.empty")}</div>}
         </div>
-      </section>
+      </Card>
 
       {confirming && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 animate-fade-in" onClick={() => setConfirming(false)}>
@@ -353,10 +360,10 @@ function PresetEditor({ preset, onClose }: { preset: CIDRPreset | null; onClose:
               {added.length + removed.length === 0 && <div className="font-sans text-ink-muted">{t("pp.confirm.nochange")}</div>}
             </div>
             <div className="flex justify-end gap-2 border-t border-line-subtle p-4">
-              <button className={cn(btn.base, btn.secondary)} onClick={() => setConfirming(false)}>{t("pp.cancel")}</button>
-              <button className={cn(btn.base, btn.primary)} disabled={save.isPending} onClick={() => save.mutate()}>
+              <Button variant="secondary" onClick={() => setConfirming(false)}>{t("pp.cancel")}</Button>
+              <Button disabled={save.isPending} onClick={() => save.mutate()}>
                 {save.isPending ? "…" : t("pp.confirm.save")}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

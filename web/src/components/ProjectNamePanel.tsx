@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
-import { cn } from "../lib/cn";
+import { Alert, Button, Card, CardBody, CardHeader, Input } from "./ui";
 
 // ProjectNamePanel — rename the project's display name. The slug stays fixed
 // (touching it would break deploy tokens, ingresses, bookmarks); this is just
@@ -56,23 +56,14 @@ export function ProjectNamePanel({
   });
 
   return (
-    <section className="rounded-lg border border-line-subtle bg-canvas-base">
-      <header className="px-5 py-4 border-b border-line-subtle/60">
-        <h3 className="text-[14px] font-semibold text-ink-strong">{t("name.title")}</h3>
-        <p className="mt-1 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">
-          {t("name.desc")}
-        </p>
-      </header>
+    <Card>
+      <CardHeader title={t("name.title")} description={t("name.desc")} />
 
-      <div className="px-5 py-4 space-y-3">
-        {isDefaulted && (
-          <div className="rounded-md border border-status-warn-fg/30 bg-status-warn-bg/40 text-status-warn-fg text-[12px] px-3 py-2 leading-relaxed">
-            {t("name.warning.defaulted", { slug })}
-          </div>
-        )}
+      <CardBody className="space-y-3">
+        {isDefaulted && <Alert variant="warning">{t("name.warning.defaulted", { slug })}</Alert>}
 
         <div className="flex items-center gap-2">
-          <input
+          <Input
             type="text"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -80,21 +71,12 @@ export function ProjectNamePanel({
             spellCheck={false}
             maxLength={120}
             placeholder={t("name.placeholder")}
-            className="flex-1 rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong disabled:opacity-100 disabled:bg-canvas-raised disabled:text-ink-muted disabled:cursor-not-allowed"
+            className="flex-1"
           />
           {canEdit && (
-            <button
-              onClick={() => save.mutate()}
-              disabled={!dirty || save.isPending}
-              className={cn(
-                "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors whitespace-nowrap",
-                dirty && !save.isPending
-                  ? "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
-                  : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
-              )}
-            >
+            <Button onClick={() => save.mutate()} disabled={!dirty || save.isPending}>
               {save.isPending ? t("access.button.save.busy") : t("access.button.save")}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -105,12 +87,8 @@ export function ProjectNamePanel({
           {savedFlash && <span className="text-status-ok-fg">{t("access.toast.saved")}</span>}
         </div>
 
-        {opError && (
-          <div className="rounded-md border border-status-fail-fg/30 bg-status-fail-bg/40 text-status-fail-fg text-[12px] px-3 py-2">
-            {opError}
-          </div>
-        )}
-      </div>
-    </section>
+        {opError && <Alert variant="danger">{opError}</Alert>}
+      </CardBody>
+    </Card>
   );
 }

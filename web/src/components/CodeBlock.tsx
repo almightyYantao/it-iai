@@ -2,6 +2,7 @@ import { useState } from "react";
 import { cn } from "../lib/cn";
 import { copyText } from "../lib/clipboard";
 import { CheckIcon, ClipboardIcon } from "./icons";
+import { Button } from "./ui";
 
 // CodeBlock — a monospace block with a copy-on-click affordance. Designed
 // for the Skill tutorial; useful elsewhere if we want a richer code surface
@@ -40,14 +41,15 @@ export function CodeBlock({
             {title ?? language}
           </div>
           {copyable && (
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={doCopy}
-              className="inline-flex items-center gap-1 text-[11px] text-ink-faint hover:text-ink transition-colors"
+              className="h-auto gap-1 px-1 py-0.5 text-[11px] text-ink-faint [&_svg]:size-3"
             >
               {copied ? <CheckIcon className="size-3" /> : <ClipboardIcon className="size-3" />}
               {copied ? "复制成功" : ""}
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -55,13 +57,15 @@ export function CodeBlock({
         <code>{code}</code>
       </pre>
       {copyable && !(title || language) && (
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={doCopy}
-          className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-md border border-line bg-canvas-base px-2 py-1 text-[11px] text-ink-faint hover:text-ink opacity-0 group-hover/code:opacity-100 transition"
+          className="absolute top-2 right-2 h-6 px-2 text-[11px] text-ink-faint hover:text-ink opacity-0 group-hover/code:opacity-100 [&_svg]:size-3"
         >
           {copied ? <CheckIcon className="size-3" /> : <ClipboardIcon className="size-3" />}
-        </button>
+        </Button>
       )}
     </div>
   );
