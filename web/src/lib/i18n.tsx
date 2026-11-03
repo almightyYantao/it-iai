@@ -11,6 +11,21 @@ type Dict = Record<string, string>;
 const STORAGE_KEY = "iai.locale";
 
 const zh: Dict = {
+  "ew.title": "出站白名单",
+  "ew.hint": "强制模式下只放行这些目标。域名前加点（.example.com）表示包含所有子域；数据库、SMTP 这类非 HTTP 流量用「IP / 网段」。",
+  "ew.empty": "还没有规则。强制模式下这个项目将无法访问任何外部地址。",
+  "ew.kind.domain": "域名",
+  "ew.kind.endpoint": "IP / 网段",
+  "ew.port": "端口",
+  "ew.note": "备注（可选）",
+  "ew.add": "添加",
+  "ew.add.one": "加入白名单",
+  "ew.inlist": "已在白名单",
+  "ew.remove": "删除",
+  "ew.remove.confirm": "从出站白名单删除 {{v}}？",
+  "ew.saved": "出站白名单已保存",
+  "ew.enforce.uncovered": "下面 {{n}} 个最近访问过的域名不在白名单里，切换后会被拒绝：",
+  "ew.enforce.addall": "全部加入白名单并切换",
   "nav.language": "语言",
   "ui.cancel": "取消",
   "ui.confirm": "确认",
@@ -664,6 +679,21 @@ const zh: Dict = {
 };
 
 const en: Dict = {
+  "ew.title": "Egress allow-list",
+  "ew.hint": "In enforce mode only these targets are reachable. A leading dot (.example.com) includes subdomains; use IP / CIDR for non-HTTP traffic such as databases or SMTP.",
+  "ew.empty": "No rules. In enforce mode this project can reach nothing external.",
+  "ew.kind.domain": "Domain",
+  "ew.kind.endpoint": "IP / CIDR",
+  "ew.port": "Port",
+  "ew.note": "Note (optional)",
+  "ew.add": "Add",
+  "ew.add.one": "Allow",
+  "ew.inlist": "Allowed",
+  "ew.remove": "Remove",
+  "ew.remove.confirm": "Remove {{v}} from the egress allow-list?",
+  "ew.saved": "Egress allow-list saved",
+  "ew.enforce.uncovered": "{{n}} recently used domains aren't allow-listed and will be denied:",
+  "ew.enforce.addall": "Allow all and switch",
   "nav.language": "Language",
   "ui.cancel": "Cancel",
   "ui.confirm": "Confirm",

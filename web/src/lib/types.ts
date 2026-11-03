@@ -223,3 +223,11 @@ export interface EgressProxyStatus {
   recent?: { allowed: number; denied: number };
   checked_at: string;
 }
+
+export interface EgressRule {
+  id?: string;
+  kind: "domain" | "endpoint";
+  value: string; // domain (leading dot = include subdomains) or IP/CIDR
+  port: number;
+  note: string;
+}
