@@ -91,6 +91,9 @@ func (d *Deployer) EnsureEgressProxy(ctx context.Context, squidConf string, port
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
+			// hostNetwork: old and new pods would fight over the same host ports,
+			// so a rolling update can never finish. Replace instead.
+			Strategy: appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType},
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": egressProxyName}},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
