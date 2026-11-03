@@ -70,8 +70,11 @@ func tcpProbe(ctx context.Context, name, addr string, send, expect string) servi
 		}
 		buf := make([]byte, 64)
 		n, _ := c.Read(buf)
-		if !strings.Contains(string(buf[:n]), expect) {
-			p.Detail = fmt.Sprintf("unexpected reply %q", strings.TrimSpace(string(buf[:n])))
+		reply := string(buf[:n])
+		// Any well-formed reply means the service is up; an auth challenge
+		// (Redis with requirepass answers PING with -NOAUTH) counts too.
+		if !strings.Contains(reply, expect) && !strings.Contains(reply, "NOAUTH") {
+			p.Detail = fmt.Sprintf("unexpected reply %q", strings.TrimSpace(reply))
 			return p
 		}
 	}
