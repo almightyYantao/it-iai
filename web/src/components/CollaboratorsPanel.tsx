@@ -48,8 +48,8 @@ export function CollaboratorsPanel({ slug, ownerEmail }: { slug: string; ownerEm
   }
 
   return (
-    <section>
-      <h2 className="text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium mb-2">
+    <section className="rounded-lg border border-line-subtle bg-canvas-base p-6">
+      <h2 className="text-[15px] font-semibold text-ink-strong mb-1">
         {t("collab.heading")}
       </h2>
       <p className="text-[12.5px] text-ink-muted mb-3">
@@ -63,7 +63,7 @@ export function CollaboratorsPanel({ slug, ownerEmail }: { slug: string; ownerEm
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder={t("collab.add.placeholder")}
-          className="flex-1 h-9 rounded-md bg-canvas-surface border border-line px-3 text-[13px] placeholder-ink-faint text-ink-DEFAULT focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand-ring transition"
+          className="flex-1 h-9 rounded-md bg-canvas-surface border border-line px-3 text-[13px] placeholder-ink-faint text-ink focus:outline-none focus:border-line-strong focus:ring-2 focus:ring-brand-ring transition"
         />
         <button
           type="submit"
@@ -90,19 +90,19 @@ export function CollaboratorsPanel({ slug, ownerEmail }: { slug: string; ownerEm
       )}
 
       {q.data && (q.data.collaborators?.length ?? 0) > 0 && (
-        <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-surface">
+        <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-base">
           <table className="min-w-full text-[13px]">
-            <thead className="bg-canvas-base/40">
-              <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+            <thead className="bg-canvas-surface">
+              <tr className="text-left text-[12px] font-medium text-ink-muted">
                 <th className="px-5 py-3 font-medium">{t("collab.col.email")}</th>
                 <th className="px-5 py-3 font-medium">{t("collab.col.role")}</th>
                 <th className="px-5 py-3 font-medium">{t("collab.col.added")}</th>
                 <th className="px-5 py-3 font-medium text-right">{t("users.col.actions")}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line-subtle/60">
+            <tbody className="divide-y divide-line-subtle">
               {q.data.collaborators.map((c) => (
-                <tr key={c.user_id} className="hover:bg-canvas-raised/50 transition-colors">
+                <tr key={c.user_id} className="hover:bg-canvas-surface transition-colors">
                   <td className="px-5 py-3"><OwnerCell email={c.email} /></td>
                   <td className="px-5 py-3 text-ink-muted">
                     {c.role === "admin" ? t("collab.role.admin") : t("collab.role.editor")}

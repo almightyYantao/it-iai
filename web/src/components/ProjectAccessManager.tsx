@@ -18,8 +18,8 @@ const splitIPs = (v: string) =>
   v.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
 
 const fieldCls =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] text-ink-strong placeholder:text-ink-faint " +
-  "outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/20";
+  "w-full rounded-lg border border-line bg-canvas-base px-3 py-2 text-[13px] text-ink-strong placeholder:text-ink-faint " +
+  "outline-none transition focus:border-line-strong focus:ring-4 focus:ring-ink-strong/10";
 
 export function ProjectAccessManager() {
   const { t } = useI18n();
@@ -51,7 +51,7 @@ export function ProjectAccessManager() {
         <p className="mt-1 text-[12.5px] text-ink-muted leading-relaxed">{t("pa.desc")}</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] overflow-hidden rounded-2xl border border-line-subtle bg-white shadow-soft">
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] overflow-hidden rounded-lg border border-line-subtle bg-canvas-base shadow-soft">
         {/* Project list */}
         <aside className="border-b lg:border-b-0 lg:border-r border-line-subtle bg-canvas-surface/60">
           <div className="p-3">
@@ -75,15 +75,15 @@ export function ProjectAccessManager() {
                   <button
                     onClick={() => setSlug(p.slug)}
                     className={cn(
-                      "group w-full rounded-xl px-3 py-2.5 text-left transition",
-                      active ? "bg-brand text-white shadow-raised" : "hover:bg-white hover:shadow-soft",
+                      "group w-full rounded-md px-3 py-2.5 text-left transition",
+                      active ? "bg-brand text-white shadow-raised" : "hover:bg-canvas-base hover:shadow-soft",
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className={cn("truncate text-[13px] font-medium", active ? "text-white" : "text-ink-strong")}>{p.name}</span>
                       <span className={cn(
                         "shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-medium",
-                        active ? "bg-white/20 text-white" : "bg-canvas-raised text-ink-muted",
+                        active ? "bg-canvas-base/20 text-white" : "bg-canvas-raised text-ink-muted",
                       )}>
                         {labelOf(p.access_preset)}
                       </span>
@@ -103,7 +103,7 @@ export function ProjectAccessManager() {
             <ProjectPane key={selected.slug} project={selected} presets={presetList} notify={notify} />
           ) : (
             <div className="flex h-full min-h-[420px] flex-col items-center justify-center gap-3 text-ink-faint">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-canvas-raised">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-canvas-raised">
                 <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
                   <path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z" strokeLinejoin="round" />
                 </svg>
@@ -117,7 +117,7 @@ export function ProjectAccessManager() {
       {toast && (
         <div className={cn(
           "fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-[12.5px] font-medium text-white shadow-raised",
-          toast.ok ? "bg-ink-strong" : "bg-red-600",
+          toast.ok ? "bg-ink-strong" : "bg-status-fail-fg",
         )}>
           {toast.text}
         </div>
@@ -162,7 +162,7 @@ function ProjectPane({ project, presets, notify }: { project: Project; presets: 
           <h4 className="text-[13px] font-semibold text-ink-strong">{t("pa.preset")}</h4>
           <span className="text-[11.5px] text-ink-faint">{t("pa.preset.hint")}</span>
         </div>
-        <div className="inline-flex flex-wrap gap-1 rounded-xl bg-canvas-raised p-1">
+        <div className="inline-flex flex-wrap gap-1 rounded-md bg-canvas-raised p-1">
           {presets.map((p) => (
             <button
               key={p.name}
@@ -170,7 +170,7 @@ function ProjectPane({ project, presets, notify }: { project: Project; presets: 
               onClick={() => p.name !== current && setPreset.mutate(p.name)}
               className={cn(
                 "rounded-lg px-3.5 py-1.5 text-[12.5px] font-medium transition",
-                p.name === current ? "bg-white text-ink-strong shadow-soft" : "text-ink-muted hover:text-ink-strong",
+                p.name === current ? "bg-canvas-base text-ink-strong shadow-soft" : "text-ink-muted hover:text-ink-strong",
               )}
             >
               {p.label}
@@ -198,7 +198,7 @@ function ProjectPane({ project, presets, notify }: { project: Project; presets: 
         </div>
 
         {rootOpen && (
-          <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800">
+          <div className="mb-3 rounded-md border border-status-warn-bg bg-status-warn-bg px-4 py-2.5 text-[12px] text-status-warn-fg">
             ⚠ {t("pa.warn.root")}
           </div>
         )}
@@ -215,7 +215,7 @@ function ProjectPane({ project, presets, notify }: { project: Project; presets: 
             ),
           )}
           {list.length === 0 && editing !== "new" && !rules.isLoading && (
-            <div className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-[12.5px] text-ink-faint">
+            <div className="rounded-md border border-dashed border-line px-4 py-8 text-center text-[12.5px] text-ink-faint">
               {t("pa.rules.empty")}
             </div>
           )}
@@ -251,11 +251,11 @@ function RuleRow({ slug, rule, notify, onEdit }: { slug: string; rule: ProjectPa
   });
 
   return (
-    <div className="group flex items-center gap-3 rounded-xl border border-line-subtle bg-white px-4 py-3 transition hover:border-line hover:shadow-soft">
+    <div className="group flex items-center gap-3 rounded-md border border-line-subtle bg-canvas-base px-4 py-3 transition hover:border-line hover:shadow-soft">
       <code className="min-w-0 flex-1 truncate font-mono text-[13px] text-ink-strong">{rule.path_prefix}</code>
       <ModeBadge mode={rule.mode} />
       {ext.length > 0 ? (
-        <span title={ext.join("\n")} className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+        <span title={ext.join("\n")} className="rounded-full bg-status-ok-bg px-2 py-0.5 text-[11px] font-medium text-status-ok-fg">
           🌐 {t("pa.ext.count", { n: String(ext.length) })}
         </span>
       ) : (
@@ -268,7 +268,7 @@ function RuleRow({ slug, rule, notify, onEdit }: { slug: string; rule: ProjectPa
         <button
           disabled={del.isPending}
           onClick={() => confirm(t("pa.delete.confirm", { path: rule.path_prefix })) && del.mutate()}
-          className="rounded-lg px-2.5 py-1 text-[12px] text-ink-muted hover:bg-red-50 hover:text-red-600"
+          className="rounded-lg px-2.5 py-1 text-[12px] text-ink-muted hover:bg-status-fail-bg hover:text-status-fail-fg"
         >
           {t("pa.delete")}
         </button>
@@ -307,15 +307,15 @@ function RuleForm({ slug, rule, notify, onClose }: { slug: string; rule?: Projec
   };
 
   return (
-    <div className="rounded-xl border border-brand/40 bg-white p-4 shadow-raised ring-4 ring-brand/10 space-y-4">
+    <div className="rounded-md border border-line-strong bg-canvas-base p-4 shadow-raised ring-4 ring-ink-strong/10 space-y-4">
       <div>
-        <label className="mb-1.5 block text-[12px] font-medium text-ink-DEFAULT">{t("pa.rule.prefix")}</label>
+        <label className="mb-1.5 block text-[12px] font-medium text-ink">{t("pa.rule.prefix")}</label>
         <input autoFocus className={cn(fieldCls, "font-mono")} placeholder="/webhook" value={prefix} onChange={(e) => setPrefix(e.target.value)} />
-        {prefix === "/" && <p className="mt-1 text-[11.5px] text-amber-700">{t("pa.warn.root")}</p>}
+        {prefix === "/" && <p className="mt-1 text-[11.5px] text-status-warn-fg">{t("pa.warn.root")}</p>}
       </div>
 
       <div>
-        <label className="mb-1.5 block text-[12px] font-medium text-ink-DEFAULT">{t("pa.rule.mode")}</label>
+        <label className="mb-1.5 block text-[12px] font-medium text-ink">{t("pa.rule.mode")}</label>
         <div className="grid grid-cols-2 gap-2">
           {(["token", "no_auth"] as Mode[]).map((m) => {
             const disabled = extOn && m === "no_auth";
@@ -325,8 +325,8 @@ function RuleForm({ slug, rule, notify, onClose }: { slug: string; rule?: Projec
                 disabled={disabled}
                 onClick={() => setMode(m)}
                 className={cn(
-                  "rounded-xl border px-3 py-2.5 text-left transition",
-                  mode === m ? "border-brand bg-brand/5" : "border-line-subtle hover:border-line",
+                  "rounded-md border px-3 py-2.5 text-left transition",
+                  mode === m ? "border-ink-strong bg-canvas-surface" : "border-line-subtle hover:border-line",
                   disabled && "cursor-not-allowed opacity-40",
                 )}
               >
@@ -338,14 +338,14 @@ function RuleForm({ slug, rule, notify, onClose }: { slug: string; rule?: Projec
         </div>
       </div>
 
-      <div className="rounded-xl bg-canvas-surface p-3">
+      <div className="rounded-md bg-canvas-surface p-3">
         <button onClick={toggleExt} className="flex w-full items-center justify-between text-left">
           <div>
             <div className="text-[12.5px] font-medium text-ink-strong">{t("pa.ext.toggle")}</div>
             <div className="text-[11px] text-ink-muted">{t("pa.ext.hint")}</div>
           </div>
           <span className={cn("relative h-5 w-9 shrink-0 rounded-full transition", extOn ? "bg-brand" : "bg-line")}>
-            <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all", extOn ? "left-[18px]" : "left-0.5")} />
+            <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-canvas-base shadow transition-all", extOn ? "left-[18px]" : "left-0.5")} />
           </span>
         </button>
         {extOn && (
@@ -368,7 +368,7 @@ function RuleForm({ slug, rule, notify, onClose }: { slug: string; rule?: Projec
           onClick={() => save.mutate()}
           className={cn(
             "rounded-full px-4 py-1.5 text-[12.5px] font-medium transition",
-            valid ? "bg-brand text-white hover:bg-brand-hover" : "bg-canvas-raised text-ink-faint cursor-not-allowed",
+            valid ? "bg-brand text-white hover:bg-brand-hover" : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
           )}
         >
           {save.isPending ? "…" : t("pa.save")}

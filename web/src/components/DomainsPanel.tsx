@@ -72,7 +72,7 @@ export function DomainsPanel({
     onError: (err) => setOpError(err instanceof ApiError ? err.message : String(err)),
   });
 
-  const defaultHost = q.data?.default.hostname ?? "";
+  const defaultHost = q.data?.default?.hostname ?? "";
   // The platform base domain = everything after the slug. The default hostname
   // is always "<slug>.<base>" by construction, so this split is safe.
   const baseDomain = defaultHost.startsWith(slug + ".")
@@ -113,7 +113,7 @@ export function DomainsPanel({
   const atLimit = customs.length >= maxCustom;
 
   return (
-    <section className="rounded-lg border border-line-subtle bg-canvas-surface">
+    <section className="rounded-lg border border-line-subtle bg-canvas-base">
       <header className="px-5 py-4 border-b border-line-subtle/60">
         <h3 className="text-[14px] font-semibold text-ink-strong">{t("domains.heading")}</h3>
         <p className="mt-1 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">
@@ -124,14 +124,14 @@ export function DomainsPanel({
       <div className="px-5 py-4">
         <table className="min-w-full text-[13px]">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+            <tr className="text-left text-[12px] font-medium text-ink-muted">
               <th className="py-2 pr-4 font-medium">{t("domains.col.hostname")}</th>
               <th className="py-2 pr-4 font-medium">{t("domains.col.kind")}</th>
               <th className="py-2 pr-4 font-medium">{t("domains.col.added")}</th>
               <th className="py-2 font-medium text-right">{t("domains.col.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-line-subtle/60">
+          <tbody className="divide-y divide-line-subtle">
             {/* Default subdomain — never editable. Always at top. */}
             {q.data && (
               <tr className="align-middle">
@@ -140,14 +140,14 @@ export function DomainsPanel({
                     href={`https://${defaultHost}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="hover:text-brand inline-flex items-center gap-1"
+                    className="hover:text-ink-strong hover:underline inline-flex items-center gap-1"
                   >
                     {defaultHost}
                     <ExternalIcon className="size-3 opacity-60" />
                   </a>
                 </td>
                 <td className="py-3 pr-4">
-                  <span className="inline-flex items-center rounded-full bg-brand/10 text-brand px-1.5 py-0.5 text-[10.5px] font-medium tracking-wide uppercase">
+                  <span className="inline-flex items-center rounded-full bg-canvas-raised text-ink-strong px-1.5 py-0.5 text-[10.5px] font-medium">
                     {t("domains.default.tag")}
                   </span>
                 </td>
@@ -162,7 +162,7 @@ export function DomainsPanel({
                     href={`https://${d.hostname}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="hover:text-brand inline-flex items-center gap-1"
+                    className="hover:text-ink-strong hover:underline inline-flex items-center gap-1"
                   >
                     {d.hostname}
                     <ExternalIcon className="size-3 opacity-60" />
@@ -204,11 +204,11 @@ export function DomainsPanel({
             {/* Vanity subdomain — fixed suffix, only the prefix is editable.
                 No DNS / TLS for the user to set up; wildcard cert covers it. */}
             <form onSubmit={onAddSubdomain} className="space-y-2">
-              <div className="text-[11.5px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+              <div className="text-[12px] font-medium text-ink-muted">
                 {t("domains.subdomain.heading")}
               </div>
               <div className="flex items-stretch gap-2">
-                <div className="flex-1 inline-flex rounded-md border border-line bg-canvas-base overflow-hidden focus-within:ring-2 focus-within:ring-brand/30 focus-within:border-brand">
+                <div className="flex-1 inline-flex rounded-md border border-line bg-canvas-base overflow-hidden focus-within:ring-2 focus-within:ring-brand/30 focus-within:border-ink-strong">
                   <input
                     value={subInput}
                     onChange={(e) => setSubInput(e.target.value)}
@@ -227,8 +227,8 @@ export function DomainsPanel({
                   className={cn(
                     "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
                     add.isPending || subInput.trim() === ""
-                      ? "bg-canvas-raised text-ink-faint cursor-not-allowed"
-                      : "bg-ink-strong text-canvas-base hover:bg-ink-DEFAULT",
+                      ? "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed"
+                      : "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium",
                   )}
                 >
                   {add.isPending ? t("domains.add.busy") : t("domains.subdomain.button")}
@@ -241,7 +241,7 @@ export function DomainsPanel({
 
             {/* Fully-custom domain — user owns the DNS, types the full FQDN. */}
             <form onSubmit={onAddCustom} className="space-y-2">
-              <div className="text-[11.5px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+              <div className="text-[12px] font-medium text-ink-muted">
                 {t("domains.custom.heading")}
               </div>
               <div className="flex gap-2">
@@ -251,7 +251,7 @@ export function DomainsPanel({
                   placeholder={t("domains.add.placeholder")}
                   spellCheck={false}
                   autoComplete="off"
-                  className="flex-1 rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                  className="flex-1 rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
                 />
                 <button
                   type="submit"
@@ -259,8 +259,8 @@ export function DomainsPanel({
                   className={cn(
                     "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
                     add.isPending || hostInput.trim() === ""
-                      ? "bg-canvas-raised text-ink-faint cursor-not-allowed"
-                      : "bg-ink-strong text-canvas-base hover:bg-ink-DEFAULT",
+                      ? "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed"
+                      : "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium",
                   )}
                 >
                   {add.isPending ? t("domains.add.busy") : t("domains.add.button")}

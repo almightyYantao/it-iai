@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { StatusBadge } from "../components/StatusBadge";
 
 import { api } from "../lib/api";
 import { useI18n } from "../lib/i18n";
@@ -13,6 +15,8 @@ export function Overview() {
     queryFn: api.metrics,
     refetchInterval: 5000,
   });
+  const ps = useQuery({ queryKey: ["overview-projects"], queryFn: () => api.listAllProjects(200, 0), refetchInterval: 15000 });
+  const attention = (ps.data?.projects ?? []).filter((p) => p.status !== "running").slice(0, 5);
 
   return (
     <PageContainer>
@@ -29,12 +33,12 @@ export function Overview() {
 
       {m.data && (
         <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-12 lg:col-span-7 rounded-lg border border-line-subtle bg-canvas-surface px-6 py-5">
-            <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+          <div className="col-span-12 lg:col-span-7 rounded-lg border border-line-subtle bg-canvas-base transition-colors hover:border-line px-6 py-5">
+            <div className="text-[13px] text-ink-muted font-medium">
               {t("overview.health.label")}
             </div>
             <div className="mt-3 flex items-baseline gap-3">
-              <div className="text-[44px] font-semibold tabular-nums leading-none text-ink-strong">
+              <div className="text-[48px] font-semibold tracking-[-0.04em] tabular-nums leading-none text-ink-strong">
                 {m.data.projects.running}
               </div>
               <div className="text-[13.5px] text-ink-muted">
@@ -69,6 +73,23 @@ export function Overview() {
                   m.data.projects.total - m.data.projects.running - m.data.projects.failed,
                 )}
               />
+            </div>
+            <div className="mt-6 border-t border-line-subtle pt-4">
+              <div className="mb-2 text-[13px] font-medium text-ink-strong">{t("overview.attention")}</div>
+              {attention.length === 0 ? (
+                <p className="text-[12.5px] text-ink-faint">{t("overview.attention.none")}</p>
+              ) : (
+                <ul className="divide-y divide-line-subtle">
+                  {attention.map((p) => (
+                    <li key={p.id}>
+                      <Link to={`/projects/${p.slug}`} className="flex items-center justify-between gap-3 py-2 text-[13px] hover:text-ink-strong">
+                        <span className="truncate text-ink">{p.name || p.slug}</span>
+                        <StatusBadge status={p.status} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 

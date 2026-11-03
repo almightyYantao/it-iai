@@ -133,7 +133,7 @@ export function Settings() {
             {dirty && (
               <button
                 onClick={() => setDraft({})}
-                className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink-DEFAULT transition-colors"
+                className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink transition-colors"
               >
                 {t("settings.button.reset")}
               </button>
@@ -144,8 +144,8 @@ export function Settings() {
               className={cn(
                 "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
                 dirty && !save.isPending
-                  ? "bg-ink-strong text-canvas-base hover:bg-ink-DEFAULT"
-                  : "bg-canvas-raised text-ink-faint cursor-not-allowed",
+                  ? "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
+                  : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
               )}
             >
               {save.isPending ? t("settings.button.save.busy") : t("settings.button.save")}
@@ -229,7 +229,7 @@ function Section({
         <h2 className="text-[15px] font-medium text-ink-strong">{title}</h2>
         <p className="mt-1.5 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">{description}</p>
       </header>
-      <div className="rounded-lg border border-line-subtle bg-canvas-surface divide-y divide-line-subtle/60">
+      <div className="rounded-lg border border-line-subtle bg-canvas-base divide-y divide-line-subtle">
         {children}
       </div>
     </section>
@@ -271,16 +271,16 @@ function Field({
   return (
     <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-[200px_1fr] gap-x-6 gap-y-1.5">
       <div className="pt-1.5">
-        <label htmlFor={`f-${field}`} className="block text-[12.5px] font-medium text-ink-DEFAULT">
+        <label htmlFor={`f-${field}`} className="block text-[12.5px] font-medium text-ink">
           {label}
         </label>
         <div className="mt-1.5 flex items-center gap-1.5">
           {dbMeta?.has_override ? (
-            <span className="inline-flex items-center rounded-full bg-brand/12 text-brand px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase">
+            <span className="inline-flex items-center rounded-full bg-canvas-raised text-ink-strong px-1.5 py-0.5 text-[10px] font-medium">
               {t("settings.badge.db")}
             </span>
           ) : (
-            <span className="inline-flex items-center rounded-full bg-canvas-raised text-ink-faint px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase">
+            <span className="inline-flex items-center rounded-full bg-canvas-raised text-ink-faint px-1.5 py-0.5 text-[10px] font-medium">
               {t("settings.badge.env")}
             </span>
           )}
@@ -300,7 +300,7 @@ function Field({
           spellCheck={false}
           autoComplete="off"
           onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+          className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
         />
         {hint && <p className="mt-1.5 text-[11.5px] text-ink-muted leading-relaxed">{hint}</p>}
       </div>
@@ -397,7 +397,7 @@ function CIDRPresetsSection() {
         {!editing && (
           <button
             onClick={startNew}
-            className="shrink-0 px-3 py-1.5 rounded-md text-[12.5px] font-medium bg-ink-strong text-canvas-base hover:bg-ink-DEFAULT transition-colors"
+            className="shrink-0 px-3 py-1.5 rounded-md text-[12.5px] font-medium bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium transition-colors"
           >
             {t("presets.add.button")}
           </button>
@@ -417,17 +417,17 @@ function CIDRPresetsSection() {
       {q.isLoading && <LoadingRows rows={2} cols={2} />}
 
       {q.data && (
-        <div className="rounded-lg border border-line-subtle bg-canvas-surface overflow-hidden">
+        <div className="rounded-lg border border-line-subtle bg-canvas-base overflow-hidden">
           <table className="min-w-full text-[13px]">
-            <thead className="bg-canvas-base/40">
-              <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+            <thead className="bg-canvas-surface">
+              <tr className="text-left text-[12px] font-medium text-ink-muted">
                 <th className="px-5 py-3 font-medium">{t("presets.col.label")}</th>
                 <th className="px-5 py-3 font-medium">{t("presets.col.cidrs")}</th>
                 <th className="px-5 py-3 font-medium">{t("presets.col.system")}</th>
                 <th className="px-5 py-3 font-medium text-right">{t("presets.col.actions")}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line-subtle/60">
+            <tbody className="divide-y divide-line-subtle">
               {presets.map((p) => (
                 <tr key={p.name} className="align-top">
                   <td className="px-5 py-3.5">
@@ -439,12 +439,12 @@ function CIDRPresetsSection() {
                       </div>
                     )}
                   </td>
-                  <td className="px-5 py-3.5 text-[11.5px] text-ink-DEFAULT align-top">
+                  <td className="px-5 py-3.5 text-[11.5px] text-ink align-top">
                     {p.cidrs.length === 0 ? (
                       <span className="text-ink-faint italic font-mono">—</span>
                     ) : (
                       <div>
-                        <div className="text-[10.5px] uppercase tracking-wide text-ink-faint mb-1 font-sans">
+                        <div className="text-[12px] text-ink-faint mb-1 font-sans">
                           {t("presets.cidrs.count", { n: String(p.cidrs.length) })}
                         </div>
                         <div className="max-h-40 overflow-y-auto font-mono leading-relaxed pr-1">
@@ -458,7 +458,7 @@ function CIDRPresetsSection() {
                   <td className="px-5 py-3.5">
                     {p.is_system ? (
                       <span
-                        className="inline-flex items-center rounded-full bg-canvas-raised text-ink-muted px-1.5 py-0.5 text-[10.5px] font-medium tracking-wide uppercase"
+                        className="inline-flex items-center rounded-full bg-canvas-raised text-ink-muted px-1.5 py-0.5 text-[10.5px] font-medium"
                         title={t("presets.system.hint")}
                       >
                         {t("presets.system.tag")}
@@ -492,7 +492,7 @@ function CIDRPresetsSection() {
       )}
 
       {editing && (
-        <div className="mt-6 rounded-lg border border-brand/30 bg-brand/5 px-5 py-5 space-y-4">
+        <div className="mt-6 rounded-lg border border-ink-strong/30 bg-canvas-surface px-5 py-5 space-y-4">
           <h3 className="text-[14px] font-semibold text-ink-strong">
             {editing.isNew ? t("presets.new.title") : t("presets.edit.title", { label: editing.label || editing.name })}
           </h3>
@@ -507,7 +507,7 @@ function CIDRPresetsSection() {
                 placeholder="internal-vpc"
                 className={cn(
                   "w-full rounded-md border bg-canvas-base px-3 py-1.5 text-[13px] font-mono text-ink-strong focus:outline-none focus:ring-2 focus:ring-brand/30",
-                  slugValid ? "border-line focus:border-brand" : "border-status-fail-fg focus:border-status-fail-fg",
+                  slugValid ? "border-line focus:border-line-strong" : "border-status-fail-fg focus:border-status-fail-fg",
                 )}
               />
             </PresetField>
@@ -518,7 +518,7 @@ function CIDRPresetsSection() {
               value={editing.label}
               onChange={(e) => setEditing({ ...editing, label: e.target.value })}
               spellCheck={false}
-              className="w-full rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] text-ink-strong focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+              className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] text-ink-strong focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
             />
           </PresetField>
 
@@ -526,7 +526,7 @@ function CIDRPresetsSection() {
             <input
               value={editing.description}
               onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-              className="w-full rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] text-ink-strong focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+              className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] text-ink-strong focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
             />
           </PresetField>
 
@@ -537,7 +537,7 @@ function CIDRPresetsSection() {
               spellCheck={false}
               rows={6}
               placeholder="10.0.0.0/8&#10;192.168.1.0/24"
-              className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[12.5px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+              className="w-full rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
             />
           </PresetField>
 
@@ -553,7 +553,7 @@ function CIDRPresetsSection() {
                 setEditing(null);
                 setOpError(null);
               }}
-              className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink-DEFAULT transition-colors"
+              className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink transition-colors"
             >
               {t("presets.button.cancel")}
             </button>
@@ -563,8 +563,8 @@ function CIDRPresetsSection() {
               className={cn(
                 "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
                 canSave
-                  ? "bg-ink-strong text-canvas-base hover:bg-ink-DEFAULT"
-                  : "bg-canvas-raised text-ink-faint cursor-not-allowed",
+                  ? "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
+                  : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
               )}
             >
               {save.isPending ? t("presets.button.save.busy") : t("presets.button.save")}
@@ -587,7 +587,7 @@ function PresetField({
 }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-x-6 gap-y-1.5">
-      <label className="pt-1.5 text-[12.5px] font-medium text-ink-DEFAULT">{label}</label>
+      <label className="pt-1.5 text-[12.5px] font-medium text-ink">{label}</label>
       <div>
         {children}
         {hint && <p className="mt-1.5 text-[11.5px] text-ink-muted leading-relaxed">{hint}</p>}

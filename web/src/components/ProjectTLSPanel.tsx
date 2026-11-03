@@ -44,7 +44,7 @@ export function ProjectTLSPanel({
   });
 
   return (
-    <section className="rounded-lg border border-line-subtle bg-canvas-surface">
+    <section className="rounded-lg border border-line-subtle bg-canvas-base">
       <header className="flex items-start justify-between gap-4 px-5 py-4 border-b border-line-subtle/60">
         <div>
           <h3 className="text-[14px] font-semibold text-ink-strong">{t("tls.title")}</h3>
@@ -54,7 +54,7 @@ export function ProjectTLSPanel({
         </div>
         <span
           className={cn(
-            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium tracking-wide uppercase shrink-0",
+            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0",
             initialEnabled
               ? "bg-status-ok-bg/60 text-status-ok-fg"
               : "bg-canvas-raised text-ink-muted",
@@ -100,7 +100,7 @@ export function ProjectTLSPanel({
               {dirty && (
                 <button
                   onClick={() => setEnabled(initialEnabled)}
-                  className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink-DEFAULT transition-colors"
+                  className="px-3 py-1.5 rounded-md text-[12.5px] text-ink-muted hover:text-ink transition-colors"
                 >
                   {t("access.button.reset")}
                 </button>
@@ -111,8 +111,8 @@ export function ProjectTLSPanel({
                 className={cn(
                   "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
                   dirty && !save.isPending
-                    ? "bg-ink-strong text-canvas-base hover:bg-ink-DEFAULT"
-                    : "bg-canvas-raised text-ink-faint cursor-not-allowed",
+                    ? "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
+                    : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
                 )}
               >
                 {save.isPending ? t("access.button.save.busy") : t("access.button.save")}

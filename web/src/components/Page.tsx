@@ -6,11 +6,11 @@ import { ChevronRight } from "./icons";
 // large displays. The sidebar (~240px) already gives layout balance — let the
 // main column flex with the viewport and only keep a comfortable side gutter.
 export function PageContainer({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("w-full px-10 pt-10 pb-16", className)}>{children}</div>;
+  return <div className={cn("w-full px-6 pt-8 pb-16", className)}>{children}</div>;
 }
 
 export function PageHeader({
-  eyebrow,
+  eyebrow: _eyebrow,
   title,
   description,
   actions,
@@ -23,12 +23,7 @@ export function PageHeader({
   return (
     <header className="flex items-start justify-between gap-8 mb-8">
       <div className="min-w-0">
-        {eyebrow && (
-          <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium mb-2">
-            {eyebrow}
-          </div>
-        )}
-        <h1 className="text-[26px] leading-tight font-semibold tracking-tight text-ink-strong">{title}</h1>
+        <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.03em] text-ink-strong">{title}</h1>
         {description && <p className="mt-2 text-[13.5px] text-ink-muted max-w-prose">{description}</p>}
       </div>
       {actions && <div className="shrink-0 flex items-center gap-2">{actions}</div>}
@@ -38,16 +33,16 @@ export function PageHeader({
 
 export function Breadcrumbs({ items }: { items: Array<{ label: string; to?: string; current?: boolean }> }) {
   return (
-    <nav aria-label="breadcrumb" className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+    <nav aria-label="breadcrumb" className="flex items-center gap-1.5 text-[12px] font-medium text-ink-muted">
       {items.map((it, i) => (
         <span key={i} className="flex items-center gap-1.5">
           {i > 0 && <ChevronRight className="size-3 opacity-60" />}
           {it.to && !it.current ? (
-            <Link to={it.to} className="hover:text-ink-DEFAULT transition-colors">
+            <Link to={it.to} className="hover:text-ink transition-colors">
               {it.label}
             </Link>
           ) : (
-            <span className={cn(it.current ? "text-ink-DEFAULT normal-case tracking-normal" : "")}>{it.label}</span>
+            <span className={cn(it.current ? "text-ink normal-case tracking-normal" : "")}>{it.label}</span>
           )}
         </span>
       ))}
@@ -74,7 +69,7 @@ export function SegmentedControl<T extends string>({
             "px-2.5 py-1 rounded font-medium transition-colors",
             value === o.value
               ? "bg-canvas-raised text-ink-strong"
-              : "text-ink-muted hover:text-ink-DEFAULT",
+              : "text-ink-muted hover:text-ink",
           )}
         >
           {o.label}

@@ -66,10 +66,10 @@ export function Users() {
 
       {q.data && (q.data.users?.length ?? 0) > 0 && (
         <>
-          <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-surface">
+          <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-base">
             <table className="min-w-full text-[13px]">
-              <thead className="bg-canvas-base/40">
-                <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+              <thead className="bg-canvas-surface">
+                <tr className="text-left text-[12px] font-medium text-ink-muted">
                   <th className="px-5 py-3 font-medium">{t("users.col.email")}</th>
                   <th className="px-5 py-3 font-medium">{t("users.col.role")}</th>
                   <th className="px-5 py-3 font-medium">{t("users.col.lastseen")}</th>
@@ -77,9 +77,9 @@ export function Users() {
                   <th className="px-5 py-3 font-medium text-right">{t("users.col.actions")}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line-subtle/60">
+              <tbody className="divide-y divide-line-subtle">
                 {q.data.users.map((u) => (
-                  <tr key={u.id} className="hover:bg-canvas-raised/50 transition-colors">
+                  <tr key={u.id} className="hover:bg-canvas-surface transition-colors">
                     <td className="px-5 py-3.5">
                       <OwnerCell email={u.email} />
                       {u.name && <div className="text-[11.5px] text-ink-faint mt-0.5 ml-7">{u.name}</div>}
@@ -103,7 +103,7 @@ export function Users() {
                           "text-[12px] transition-colors " +
                           (u.is_admin
                             ? "text-ink-faint hover:text-status-fail-fg"
-                            : "text-ink-faint hover:text-brand")
+                            : "text-ink-faint hover:text-ink-strong hover:underline")
                         }
                       >
                         {u.is_admin ? t("users.action.demote") : t("users.action.promote")}

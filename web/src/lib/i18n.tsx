@@ -11,6 +11,8 @@ type Dict = Record<string, string>;
 const STORAGE_KEY = "iai.locale";
 
 const zh: Dict = {
+  "overview.attention": "需要关注的项目",
+  "overview.attention.none": "所有项目运行正常",
   "app.name": "iai",
   "app.tagline": "爱 AI · 内部部署平台",
   "app.subtitle": "管理控制台",
@@ -568,6 +570,8 @@ const zh: Dict = {
 };
 
 const en: Dict = {
+  "overview.attention": "Needs attention",
+  "overview.attention.none": "All projects healthy",
   "app.name": "iai",
   "app.tagline": "Love AI · Internal deploy platform",
   "app.subtitle": "Admin console",

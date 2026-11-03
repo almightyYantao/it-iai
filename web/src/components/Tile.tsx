@@ -24,10 +24,10 @@ export function Tile({
   tone?: Tone;
 }) {
   return (
-    <div className="rounded-lg border border-line-subtle bg-canvas-surface px-5 py-4">
-      <div className="text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">{label}</div>
+    <div className="rounded-lg border border-line-subtle bg-canvas-base transition-colors hover:border-line px-5 py-4">
+      <div className="text-[13px] text-ink-muted font-medium">{label}</div>
       <div className="mt-2 flex items-baseline gap-2">
-        <div className={cn("text-[28px] font-semibold leading-none tabular-nums", valueClass[tone])}>{value}</div>
+        <div className={cn("text-[32px] font-semibold tracking-[-0.03em] leading-none tabular-nums", valueClass[tone])}>{value}</div>
         {hint && <div className="text-[12.5px] text-ink-muted">{hint}</div>}
       </div>
     </div>
@@ -76,7 +76,7 @@ export function Legend({ tone, label, value }: { tone: Tone; label: string; valu
   return (
     <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
       <span className={cn("size-1.5 rounded-full", dot[tone])} />
-      <span className="text-ink-DEFAULT tabular-nums">{value}</span>
+      <span className="text-ink tabular-nums">{value}</span>
       <span>{label}</span>
     </span>
   );

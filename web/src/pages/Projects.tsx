@@ -78,7 +78,7 @@ export function Projects() {
             <span
               dangerouslySetInnerHTML={{
                 __html: t("projects.empty.description", {
-                  cmd: '<code class="font-mono text-ink-DEFAULT">deploy +push</code>',
+                  cmd: '<code class="font-mono text-ink">deploy +push</code>',
                 }),
               }}
             />
@@ -88,65 +88,49 @@ export function Projects() {
 
       {q.data && (q.data.projects?.length ?? 0) > 0 && (
         <>
-          <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-surface">
-            <table className="min-w-full text-[13px]">
-              <thead className="bg-canvas-base/40">
-                <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
-                  <th className="px-5 py-3 font-medium">{t("projects.col.project")}</th>
-                  <th className="px-5 py-3 font-medium">{t("projects.col.owner")}</th>
-                  <th className="px-5 py-3 font-medium">{t("projects.col.visibility")}</th>
-                  <th className="px-5 py-3 font-medium">{t("projects.col.status")}</th>
-                  <th className="px-5 py-3 font-medium">{t("projects.col.lastpush")}</th>
-                  <th className="px-5 py-3 font-medium text-right">{t("projects.col.url")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line-subtle/60">
-                {q.data.projects.map((p) => (
-                  <tr
-                    key={p.id}
-                    onClick={() => nav(`/projects/${p.slug}`)}
-                    className="group cursor-pointer hover:bg-canvas-raised/50 transition-colors"
-                  >
-                    <td className="px-5 py-3.5">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {q.data.projects.map((p) => (
+              <div
+                key={p.id}
+                onClick={() => nav(`/projects/${p.slug}`)}
+                className="group cursor-pointer rounded-lg border border-line-subtle bg-canvas-base p-5 transition-all hover:border-line-strong hover:shadow-raised"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full border border-line-subtle bg-canvas-surface text-[12px] font-semibold uppercase text-ink-strong">
+                      {(p.name || p.slug).slice(0, 1)}
+                    </div>
+                    <div className="min-w-0">
                       <Link
                         to={`/projects/${p.slug}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="font-medium text-ink-strong group-hover:text-brand"
+                        className="block truncate text-[14px] font-medium text-ink-strong"
                       >
-                        {p.slug}
+                        {p.name || p.slug}
                       </Link>
-                      {p.name && p.name !== p.slug && (
-                        <div className="text-[12px] text-ink-faint mt-0.5">{p.name}</div>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5 text-ink-muted">
-                      <OwnerCell email={p.owner_email} />
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <VisibilityPill kind={p.visibility} />
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <StatusBadge status={p.status} />
-                    </td>
-                    <td className="px-5 py-3.5 text-ink-muted tabular-nums">
-                      {timeAgo(p.last_pushed_at)}
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
                       <a
                         href={p.url}
                         onClick={(e) => e.stopPropagation()}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 font-mono text-[12px] text-ink-muted hover:text-brand"
+                        className="inline-flex max-w-full items-center gap-1 truncate text-[12.5px] text-ink-muted hover:text-ink-strong hover:underline"
                       >
                         {p.url.replace(/^https?:\/\//, "")}
-                        <ExternalIcon className="size-3 opacity-0 group-hover:opacity-60 transition" />
+                        <ExternalIcon className="size-3 shrink-0 opacity-0 transition group-hover:opacity-60" />
                       </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+                  <VisibilityPill kind={p.visibility} />
+                </div>
+                <div className="mt-5 flex items-center justify-between gap-3 text-[12.5px] text-ink-muted">
+                  <StatusBadge status={p.status} />
+                  <span className="tabular-nums">{timeAgo(p.last_pushed_at)}</span>
+                </div>
+                <div className="mt-3 border-t border-line-subtle pt-3 text-[12px] text-ink-faint">
+                  <OwnerCell email={p.owner_email} />
+                </div>
+              </div>
+            ))}
           </div>
           <Pagination state={pg} total={q.data.total ?? 0} onChange={setPg} />
         </>

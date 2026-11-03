@@ -15,7 +15,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-line bg-canvas-surface px-10 py-16 text-center">
+    <div className="rounded-lg border border-dashed border-line bg-canvas-base px-10 py-20 text-center">
       {icon && <div className="text-ink-faint flex justify-center mb-3">{icon}</div>}
       <h3 className="text-[15px] font-medium text-ink-strong">{title}</h3>
       {description && (
@@ -28,7 +28,7 @@ export function EmptyState({
 
 export function LoadingRows({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
-    <div className="rounded-lg border border-line-subtle bg-canvas-surface overflow-hidden">
+    <div className="rounded-lg border border-line-subtle bg-canvas-base overflow-hidden">
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}

@@ -66,7 +66,7 @@ export function VisibilityPill({ kind }: { kind: string }) {
   const { t } = useI18n();
   const label = t(`visibility.${kind.toLowerCase()}`);
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11.5px] text-ink-muted bg-canvas-raised/40 border border-line-subtle">
+    <span className="inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 rounded-full px-2 py-0.5 text-[11.5px] text-ink-muted bg-canvas-surface border border-line-subtle">
       {label}
     </span>
   );

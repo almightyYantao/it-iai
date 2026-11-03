@@ -56,7 +56,7 @@ export function ProjectNamePanel({
   });
 
   return (
-    <section className="rounded-lg border border-line-subtle bg-canvas-surface">
+    <section className="rounded-lg border border-line-subtle bg-canvas-base">
       <header className="px-5 py-4 border-b border-line-subtle/60">
         <h3 className="text-[14px] font-semibold text-ink-strong">{t("name.title")}</h3>
         <p className="mt-1 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">
@@ -80,7 +80,7 @@ export function ProjectNamePanel({
             spellCheck={false}
             maxLength={120}
             placeholder={t("name.placeholder")}
-            className="flex-1 rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand disabled:opacity-60"
+            className="flex-1 rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong disabled:opacity-100 disabled:bg-canvas-raised disabled:text-ink-muted disabled:cursor-not-allowed"
           />
           {canEdit && (
             <button
@@ -89,8 +89,8 @@ export function ProjectNamePanel({
               className={cn(
                 "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors whitespace-nowrap",
                 dirty && !save.isPending
-                  ? "bg-ink-strong text-canvas-base hover:bg-ink-DEFAULT"
-                  : "bg-canvas-raised text-ink-faint cursor-not-allowed",
+                  ? "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
+                  : "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed",
               )}
             >
               {save.isPending ? t("access.button.save.busy") : t("access.button.save")}

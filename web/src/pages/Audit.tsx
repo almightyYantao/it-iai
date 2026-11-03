@@ -50,10 +50,10 @@ export function Audit() {
 
       {q.data && (q.data.entries?.length ?? 0) > 0 && (
         <>
-          <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-surface">
+          <div className="overflow-hidden rounded-lg border border-line-subtle bg-canvas-base">
             <table className="min-w-full text-[13px]">
-              <thead className="bg-canvas-base/40">
-                <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+              <thead className="bg-canvas-surface">
+                <tr className="text-left text-[12px] font-medium text-ink-muted">
                   <th className="px-5 py-3 font-medium">{t("audit.col.when")}</th>
                   <th className="px-5 py-3 font-medium">{t("audit.col.actor")}</th>
                   <th className="px-5 py-3 font-medium">{t("audit.col.action")}</th>
@@ -61,20 +61,20 @@ export function Audit() {
                   <th className="px-5 py-3 font-medium">{t("audit.col.metadata")}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line-subtle/60">
+              <tbody className="divide-y divide-line-subtle">
                 {q.data.entries.map((e) => (
-                  <tr key={e.id} className="align-top hover:bg-canvas-raised/50 transition-colors">
+                  <tr key={e.id} className="align-top hover:bg-canvas-surface transition-colors">
                     <td className="px-5 py-3.5 whitespace-nowrap text-ink-muted tabular-nums">
                       {timeAgo(e.created_at)}
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap">
-                      <span className="text-[10.5px] uppercase tracking-[0.12em] text-ink-faint">
+                      <span className="text-[12px] text-ink-faint">
                         {e.actor_type}
                       </span>
                       {/* actor_label is who is accountable: the user's email, or for a
                           token the email of whoever issued it. Fall back to the UUID slice
                           when neither resolves (revoked token, deleted user). */}
-                      <div className="text-[12.5px] text-ink-DEFAULT">
+                      <div className="text-[12.5px] text-ink">
                         {e.actor_label || e.actor_id.slice(0, 12)}
                       </div>
                       {/* Only set when the token isn't already the label, i.e. we resolved a
