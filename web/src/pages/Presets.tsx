@@ -149,7 +149,8 @@ function PresetEditor({ preset, onClose }: { preset: CIDRPreset | null; onClose:
     return n && before.has(n) && (preset?.notes?.[n] ?? "") !== r.note.trim();
   });
   const metaChanged = label !== (preset?.label ?? "") || desc !== (preset?.description ?? "");
-  const dirty = isNew || added.length > 0 || removed.length > 0 || notesChanged || metaChanged;
+  const dedupes = (preset?.cidrs.length ?? 0) !== new Set(preset?.cidrs ?? []).size;
+  const dirty = isNew || dedupes || added.length > 0 || removed.length > 0 || notesChanged || metaChanged;
   const valid = hardErrors === 0 && label.trim() !== "" && (!isNew || SLUG_RE.test(name));
   const emptyInternal = preset?.name === "internal" && finalCidrs.length === 0;
 

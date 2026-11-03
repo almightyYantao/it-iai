@@ -81,6 +81,7 @@ func normaliseCIDR(raw string) (string, error) {
 // Returns the first error verbatim so the UI can pinpoint the bad row.
 func normaliseCIDRs(raws []string) ([]string, error) {
 	out := make([]string, 0, len(raws))
+	seen := map[string]bool{}
 	for _, raw := range raws {
 		if strings.TrimSpace(raw) == "" {
 			continue
@@ -89,6 +90,10 @@ func normaliseCIDRs(raws []string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+		if seen[c] {
+			continue
+		}
+		seen[c] = true
 		out = append(out, c)
 	}
 	return out, nil
