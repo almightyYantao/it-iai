@@ -1574,6 +1574,12 @@ func (d *Deployer) SetProxyEnv(ctx context.Context, slug, proxyURL string) error
 	if err != nil {
 		return err
 	}
+	// Template edits roll the pod; carry the platform's scheduling rules with
+	// them, or a Deployment created before those rules existed reschedules
+	// onto the control-plane node.
+	if aff, err := d.schedulingConstraints(ctx); err == nil {
+		dep.Spec.Template.Spec.Affinity = aff
+	}
 	for i := range dep.Spec.Template.Spec.Containers {
 		if dep.Spec.Template.Spec.Containers[i].Name == "app" {
 			c := &dep.Spec.Template.Spec.Containers[i]
