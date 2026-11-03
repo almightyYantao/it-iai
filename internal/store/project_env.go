@@ -27,7 +27,7 @@ type ProjectEnvEntry struct {
 // Caller responsibility: passing the right `system` flag. Users editing via
 // the API should always pass false; the provisioning code paths pass true.
 func (s *Store) SetProjectEnv(ctx context.Context, projectID uuid.UUID, key, value string, system bool, kek *auth.KEK, updatedBy *uuid.UUID) error {
-	ct, err := kek.Encrypt([]byte(value))
+	ct, err := kek.Encrypt([]byte(value), auth.EnvAAD(projectID.String(), key))
 	if err != nil {
 		return err
 	}
@@ -62,8 +62,11 @@ func (s *Store) GetProjectEnv(ctx context.Context, projectID uuid.UUID, kek *aut
 		if err := rows.Scan(&key, &ct); err != nil {
 			return nil, err
 		}
-		pt, err := kek.Decrypt(ct)
+		pt, err := kek.Decrypt(ct, auth.EnvAAD(projectID.String(), key))
 		if err != nil {
+			// Also fires when a ciphertext was written for a different
+			// project/key — i.e. someone moved the row. Deliberately not
+			// distinguished from a genuine key mismatch in the message.
 			return nil, errors.New("decrypt failed for env key: " + key)
 		}
 		out[key] = string(pt)

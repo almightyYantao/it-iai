@@ -42,8 +42,9 @@ func (s *Server) handleCreatePathRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		PathPrefix string `json:"path_prefix"`
-		Mode       string `json:"mode"`
+		PathPrefix string   `json:"path_prefix"`
+		Mode       string   `json:"mode"`
+		AllowCIDRs []string `json:"allow_cidrs"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_json", err.Error())
@@ -54,9 +55,13 @@ func (s *Server) handleCreatePathRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_input", errMsg)
 		return
 	}
+	cidrs, ok := s.checkPathRuleCIDRs(w, actor, mode, body.AllowCIDRs)
+	if !ok {
+		return
+	}
 
 	ctx := r.Context()
-	rule, err := s.store.CreateProjectPathRule(ctx, p.ID, prefix, mode)
+	rule, err := s.store.CreateProjectPathRule(ctx, p.ID, prefix, mode, cidrs)
 	if err != nil {
 		if errors.Is(err, store.ErrPathRuleTaken) {
 			writeError(w, http.StatusConflict, "duplicate_prefix", err.Error())
@@ -72,7 +77,7 @@ func (s *Server) handleCreatePathRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.store.WriteAudit(ctx, string(actor.Kind), actor.identityString(),
-		"project.path_rule.create", &p.ID, map[string]any{"prefix": prefix, "mode": mode})
+		"project.path_rule.create", &p.ID, map[string]any{"prefix": prefix, "mode": mode, "allow_cidrs": cidrs})
 
 	writeJSON(w, http.StatusCreated, map[string]any{"rule": rule})
 }
@@ -93,8 +98,9 @@ func (s *Server) handleUpdatePathRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		PathPrefix string `json:"path_prefix"`
-		Mode       string `json:"mode"`
+		PathPrefix string   `json:"path_prefix"`
+		Mode       string   `json:"mode"`
+		AllowCIDRs []string `json:"allow_cidrs"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "bad_json", err.Error())
@@ -105,9 +111,31 @@ func (s *Server) handleUpdatePathRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_input", errMsg)
 		return
 	}
-
 	ctx := r.Context()
-	rule, err := s.store.UpdateProjectPathRule(ctx, p.ID, ruleID, prefix, mode)
+	// A rule carrying admin-set external sources is admin-owned: an owner
+	// editing it could otherwise drop token mode or wipe the list. Omitting
+	// allow_cidrs keeps the current list.
+	var existing []string
+	if rules, err := s.store.ListProjectPathRules(ctx, p.ID); err == nil {
+		for _, x := range rules {
+			if x.ID == ruleID {
+				existing = x.AllowCIDRs
+			}
+		}
+	}
+	if len(existing) > 0 && !isAdminActor(actor) {
+		writeError(w, http.StatusForbidden, "admin_only", "this path admits external sources; only platform admins can edit it")
+		return
+	}
+	if body.AllowCIDRs == nil {
+		body.AllowCIDRs = existing
+	}
+	cidrs, ok := s.checkPathRuleCIDRs(w, actor, mode, body.AllowCIDRs)
+	if !ok {
+		return
+	}
+
+	rule, err := s.store.UpdateProjectPathRule(ctx, p.ID, ruleID, prefix, mode, cidrs)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "not_found", "rule not found")
@@ -127,7 +155,7 @@ func (s *Server) handleUpdatePathRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.store.WriteAudit(ctx, string(actor.Kind), actor.identityString(),
-		"project.path_rule.update", &p.ID, map[string]any{"id": ruleID.String(), "prefix": prefix, "mode": mode})
+		"project.path_rule.update", &p.ID, map[string]any{"id": ruleID.String(), "prefix": prefix, "mode": mode, "allow_cidrs": cidrs})
 
 	writeJSON(w, http.StatusOK, map[string]any{"rule": rule})
 }
@@ -185,4 +213,32 @@ func normalisePathRuleInput(rawPrefix, rawMode string) (prefix, mode, errMsg str
 		return "", "", "mode must be one of: no_auth, token"
 	}
 	return prefix, mode, ""
+}
+
+// checkPathRuleCIDRs validates a rule's external sources. Opening a prefix to
+// sources outside the project allow-list is a platform-admin decision, is
+// limited to that prefix, and only in token mode — an IP list alone is not
+// enough for an internet-facing path. Writes the error itself on failure.
+func (s *Server) checkPathRuleCIDRs(w http.ResponseWriter, actor Actor, mode string, raw []string) ([]string, bool) {
+	cidrs, err := normaliseCIDRs(raw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "bad_cidr", err.Error())
+		return nil, false
+	}
+	if len(cidrs) == 0 {
+		return []string{}, true
+	}
+	if !isAdminActor(actor) {
+		writeError(w, http.StatusForbidden, "admin_only", "only platform admins can admit external sources on a path")
+		return nil, false
+	}
+	if hasWorldCIDR(cidrs) {
+		writeError(w, http.StatusBadRequest, "bad_cidr", "world-open ranges (/0) are not allowed")
+		return nil, false
+	}
+	if mode != model.PathRuleModeToken {
+		writeError(w, http.StatusBadRequest, "token_required", "a path with external sources must use token mode")
+		return nil, false
+	}
+	return cidrs, true
 }

@@ -97,7 +97,7 @@ export function ProjectAPIAccessPanel({
   }
 
   return (
-    <section className="rounded-lg border border-line-subtle bg-canvas-surface">
+    <section className="rounded-lg border border-line-subtle bg-canvas-base">
       <header className="flex items-start justify-between gap-4 px-5 py-4 border-b border-line-subtle/60">
         <div>
           <h3 className="text-[14px] font-semibold text-ink-strong">{t("apiAccess.title")}</h3>
@@ -110,7 +110,7 @@ export function ProjectAPIAccessPanel({
       <div className="px-5 py-4 space-y-5">
         {/* ----- Token section ------------------------------------------- */}
         <div>
-          <div className="text-[12.5px] font-medium text-ink-DEFAULT mb-2">
+          <div className="text-[12.5px] font-medium text-ink mb-2">
             {t("apiAccess.token.label")}
           </div>
           {hasToken ? (
@@ -130,7 +130,7 @@ export function ProjectAPIAccessPanel({
                   <button
                     onClick={() => regenerate.mutate()}
                     disabled={regenerate.isPending}
-                    className="ml-auto px-2.5 py-1 rounded-md text-[12px] border border-line text-ink-DEFAULT hover:bg-canvas-raised disabled:opacity-60"
+                    className="ml-auto px-2.5 py-1 rounded-md text-[12px] border border-line text-ink hover:bg-canvas-raised disabled:opacity-100 disabled:bg-canvas-raised disabled:text-ink-muted disabled:cursor-not-allowed"
                   >
                     {regenerate.isPending ? t("apiAccess.token.btn.regen.busy") : t("apiAccess.token.btn.regen")}
                   </button>
@@ -141,7 +141,7 @@ export function ProjectAPIAccessPanel({
                       }
                     }}
                     disabled={revoke.isPending}
-                    className="px-2.5 py-1 rounded-md text-[12px] border border-line text-status-fail-fg hover:bg-status-fail-bg/40 disabled:opacity-60"
+                    className="px-2.5 py-1 rounded-md text-[12px] border border-line text-status-fail-fg hover:bg-status-fail-bg/40 disabled:opacity-100 disabled:bg-canvas-raised disabled:text-ink-muted disabled:cursor-not-allowed"
                   >
                     {revoke.isPending ? t("apiAccess.token.btn.revoke.busy") : t("apiAccess.token.btn.revoke")}
                   </button>
@@ -155,7 +155,7 @@ export function ProjectAPIAccessPanel({
                 <button
                   onClick={() => regenerate.mutate()}
                   disabled={regenerate.isPending}
-                  className="ml-auto px-2.5 py-1 rounded-md text-[12px] bg-ink-strong text-canvas-base hover:bg-ink-DEFAULT disabled:opacity-60"
+                  className="ml-auto px-2.5 py-1 rounded-md text-[12px] bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium disabled:opacity-100 disabled:bg-canvas-raised disabled:text-ink-muted disabled:cursor-not-allowed"
                 >
                   {regenerate.isPending ? t("apiAccess.token.btn.create.busy") : t("apiAccess.token.btn.create")}
                 </button>
@@ -166,7 +166,7 @@ export function ProjectAPIAccessPanel({
 
         {/* ----- Rules section ------------------------------------------- */}
         <div>
-          <div className="text-[12.5px] font-medium text-ink-DEFAULT mb-2">
+          <div className="text-[12.5px] font-medium text-ink mb-2">
             {t("apiAccess.rules.label")}
           </div>
           {tokenModeWithoutToken && (
@@ -181,16 +181,16 @@ export function ProjectAPIAccessPanel({
             <div className="text-[12.5px] text-ink-faint">{t("apiAccess.rules.empty")}</div>
           )}
           {rules.length > 0 && (
-            <ul className="divide-y divide-line-subtle/60 border border-line-subtle rounded-md overflow-hidden">
+            <ul className="divide-y divide-line-subtle border border-line-subtle rounded-md overflow-hidden">
               {rules.map((r) => (
                 <li key={r.id} className="flex items-center gap-3 px-3 py-2 text-[12.5px]">
                   <code className="font-mono text-ink-strong">{r.path_prefix}</code>
                   <span
                     className={cn(
-                      "inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-medium tracking-wide uppercase",
+                      "inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-medium",
                       r.mode === "no_auth"
                         ? "bg-canvas-raised text-ink-muted"
-                        : "bg-brand/12 text-brand",
+                        : "bg-canvas-raised text-ink-strong",
                     )}
                   >
                     {r.mode === "no_auth" ? t("apiAccess.rules.mode.no_auth") : t("apiAccess.rules.mode.token")}
@@ -216,12 +216,12 @@ export function ProjectAPIAccessPanel({
                 value={newPrefix}
                 onChange={(e) => setNewPrefix(e.target.value)}
                 placeholder={t("apiAccess.rules.input.placeholder")}
-                className="flex-1 min-w-0 rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] font-mono text-ink-strong focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                className="flex-1 min-w-0 rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
               />
               <select
                 value={newMode}
                 onChange={(e) => setNewMode(e.target.value as "no_auth" | "token")}
-                className="rounded-md border border-line bg-canvas-base px-2 py-1.5 text-[13px] text-ink-strong focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                className="rounded-md border border-line bg-canvas-base px-2 py-1.5 text-[13px] text-ink-strong focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
               >
                 <option value="no_auth">{t("apiAccess.rules.mode.no_auth")}</option>
                 <option value="token">{t("apiAccess.rules.mode.token")}</option>
@@ -232,8 +232,8 @@ export function ProjectAPIAccessPanel({
                 className={cn(
                   "px-3 py-1.5 rounded-md text-[12.5px] font-medium transition-colors shrink-0",
                   createRule.isPending || !newPrefix.trim()
-                    ? "bg-canvas-raised text-ink-faint cursor-not-allowed"
-                    : "bg-ink-strong text-canvas-base hover:bg-ink-DEFAULT",
+                    ? "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed"
+                    : "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium",
                 )}
               >
                 {createRule.isPending ? t("apiAccess.rules.btn.add.busy") : t("apiAccess.rules.btn.add")}
@@ -305,13 +305,13 @@ function RevealModal({
                 onCopy();
                 setCopied(true);
               }}
-              className="px-3 py-1.5 rounded-md text-[12.5px] border border-line text-ink-DEFAULT hover:bg-canvas-raised"
+              className="px-3 py-1.5 rounded-md text-[12.5px] border border-line text-ink hover:bg-canvas-raised"
             >
               {copied ? t("apiAccess.reveal.copied") : t("apiAccess.reveal.copy")}
             </button>
             <button
               onClick={onClose}
-              className="px-3 py-1.5 rounded-md text-[12.5px] bg-ink-strong text-canvas-base hover:bg-ink-DEFAULT"
+              className="px-3 py-1.5 rounded-md text-[12.5px] bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium"
             >
               {t("apiAccess.reveal.close")}
             </button>

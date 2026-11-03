@@ -81,7 +81,7 @@ export function EnvPanel({
   const rows = q.data?.env ?? [];
 
   return (
-    <section className="rounded-lg border border-line-subtle bg-canvas-surface">
+    <section className="rounded-lg border border-line-subtle bg-canvas-base">
       <header className="px-5 py-4 border-b border-line-subtle/60">
         <h3 className="text-[14px] font-semibold text-ink-strong">{t("env.heading")}</h3>
         <p className="mt-1 text-[12.5px] text-ink-muted leading-relaxed max-w-prose">
@@ -92,20 +92,20 @@ export function EnvPanel({
       <div className="px-5 py-4">
         <table className="min-w-full text-[13px]">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-[0.12em] text-ink-faint font-medium">
+            <tr className="text-left text-[12px] font-medium text-ink-muted">
               <th className="py-2 pr-4 font-medium">{t("env.col.key")}</th>
               <th className="py-2 pr-4 font-medium">{t("env.col.updated")}</th>
               <th className="py-2 font-medium text-right">{t("env.col.actions")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-line-subtle/60">
+          <tbody className="divide-y divide-line-subtle">
             {rows.map((e) => (
               <tr key={e.key} className="align-middle">
                 <td className="py-3 pr-4">
                   <span className="font-mono text-[12.5px] text-ink-strong">{e.key}</span>
                   {e.system && (
                     <span
-                      className="ml-2 inline-flex items-center rounded-full bg-canvas-raised text-ink-muted px-1.5 py-0.5 text-[10.5px] font-medium tracking-wide uppercase"
+                      className="ml-2 inline-flex items-center rounded-full bg-canvas-raised text-ink-muted px-1.5 py-0.5 text-[10.5px] font-medium"
                       title={t("env.system.hint")}
                     >
                       {t("env.system.tag")}
@@ -145,7 +145,7 @@ export function EnvPanel({
                 placeholder={t("env.add.key.placeholder")}
                 spellCheck={false}
                 autoComplete="off"
-                className="w-44 rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                className="w-44 rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
               />
               <input
                 value={valueInput}
@@ -154,7 +154,7 @@ export function EnvPanel({
                 type="password"
                 spellCheck={false}
                 autoComplete="new-password"
-                className="flex-1 rounded-md border border-line bg-canvas-base px-3 py-1.5 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                className="flex-1 rounded-md border border-line bg-canvas-base px-3 py-2 text-[13px] font-mono text-ink-strong placeholder:text-ink-faint focus:outline-none focus:ring-[3px] focus:ring-ink-strong/10 focus:border-line-strong"
               />
               <button
                 type="submit"
@@ -162,8 +162,8 @@ export function EnvPanel({
                 className={cn(
                   "px-3.5 py-1.5 rounded-md text-[12.5px] font-medium transition-colors",
                   save.isPending || keyInput.trim() === ""
-                    ? "bg-canvas-raised text-ink-faint cursor-not-allowed"
-                    : "bg-ink-strong text-canvas-base hover:bg-ink-DEFAULT",
+                    ? "bg-canvas-raised text-ink-muted border border-line cursor-not-allowed"
+                    : "bg-ink-strong text-canvas-base hover:bg-ink h-8 inline-flex items-center justify-center gap-1.5 font-medium",
                 )}
               >
                 {save.isPending ? t("env.add.busy") : t("env.add.button")}

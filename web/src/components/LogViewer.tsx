@@ -12,7 +12,7 @@ const phaseColor: Record<string, string> = {
   build:   "text-status-warn-dot",
   push:    "text-status-warn-dot",
   deploy:  "text-status-ok-dot",
-  runtime: "text-ink-DEFAULT",
+  runtime: "text-ink",
 };
 
 const PHASES = ["queue", "upload", "build", "push", "deploy", "runtime"] as const;
@@ -97,7 +97,7 @@ export function LogViewer({
                 onClick={() => togglePhase(p)}
                 className={cn(
                   "px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors",
-                  active ? "bg-canvas-raised text-ink-DEFAULT" : "text-ink-faint hover:text-ink-muted",
+                  active ? "bg-canvas-raised text-ink" : "text-ink-faint hover:text-ink-muted",
                 )}
               >
                 <span className={cn("inline-block size-1.5 rounded-full mr-1.5 align-middle", phaseColor[p] ? phaseColor[p].replace("text-", "bg-") : "bg-ink-faint")} />
@@ -124,7 +124,7 @@ export function LogViewer({
               </span>
             )}
           </span>
-          <button onClick={copyAll} className="inline-flex items-center gap-1 text-[11.5px] text-ink-faint hover:text-ink-DEFAULT transition">
+          <button onClick={copyAll} className="inline-flex items-center gap-1 text-[11.5px] text-ink-faint hover:text-ink transition">
             {copied ? <CheckIcon className="size-3.5" /> : <ClipboardIcon className="size-3.5" />}
             {copied ? t("log.copied") : t("log.copy")}
           </button>
@@ -168,13 +168,13 @@ const LogLine = memo(function LogLine({ ev }: { ev: DeploymentEvent }) {
       <div className="text-right text-ink-faint tabular-nums select-none">
         {hh}:{mm}:{ss}
       </div>
-      <div className={cn("flex items-center gap-1.5 text-[10.5px] uppercase tracking-wider", phaseColor[ev.phase] ?? "text-ink-muted")}>
+      <div className={cn("flex items-center gap-1.5 text-[12px]", phaseColor[ev.phase] ?? "text-ink-muted")}>
         <span className="size-1.5 rounded-full bg-current shrink-0" />
         {ev.phase}
       </div>
       <div
         className={cn("whitespace-pre-wrap break-words", {
-          "text-ink-DEFAULT": ev.level === "info",
+          "text-ink": ev.level === "info",
           "text-status-warn-fg": ev.level === "warn",
           "text-status-fail-fg": ev.level === "error",
         })}

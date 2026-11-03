@@ -12,7 +12,13 @@ type Visibility string
 const (
 	VisibilityOrg        Visibility = "org"
 	VisibilityRestricted Visibility = "restricted"
-	VisibilityPublic     Visibility = "public"
+
+	// VisibilityPublic means no auth gate at all. Withdrawn 2026-07 — the
+	// platform is internal-access-only, and the API rejects it (see
+	// handlePatchProjectVisibility). Kept so rows written before then still
+	// deserialise and so syncIngressForProject keeps treating them as ungated
+	// rather than silently changing their behaviour; not selectable anywhere.
+	VisibilityPublic Visibility = "public"
 )
 
 type ProjectStatus string
@@ -28,8 +34,8 @@ const (
 type DeploymentStatus string
 
 const (
-	DeployPending    DeploymentStatus = "pending"   // waiting for source upload
-	DeployQueued     DeploymentStatus = "queued"    // source uploaded, waiting for builder
+	DeployPending    DeploymentStatus = "pending" // waiting for source upload
+	DeployQueued     DeploymentStatus = "queued"  // source uploaded, waiting for builder
 	DeployBuilding   DeploymentStatus = "building"
 	DeployPushing    DeploymentStatus = "pushing"
 	DeployDeploying  DeploymentStatus = "deploying"
@@ -40,14 +46,14 @@ const (
 
 // Manifest is the contract between Skill and Control Plane describing how to build & run a project.
 type Manifest struct {
-	Name     string            `json:"name"`
-	Port     int               `json:"port,omitempty"`
-	Build    string            `json:"build,omitempty"`
-	Start    string            `json:"start,omitempty"`
-	Language string            `json:"language,omitempty"`
-	Needs    Needs             `json:"needs,omitempty"`
-	Env      map[string]string `json:"env,omitempty"`
-	Resources Resources        `json:"resources,omitempty"`
+	Name      string            `json:"name"`
+	Port      int               `json:"port,omitempty"`
+	Build     string            `json:"build,omitempty"`
+	Start     string            `json:"start,omitempty"`
+	Language  string            `json:"language,omitempty"`
+	Needs     Needs             `json:"needs,omitempty"`
+	Env       map[string]string `json:"env,omitempty"`
+	Resources Resources         `json:"resources,omitempty"`
 }
 
 type Needs struct {
@@ -73,30 +79,30 @@ type Resources struct {
 }
 
 type Project struct {
-	ID            uuid.UUID       `json:"id"`
-	Slug          string          `json:"slug"`
-	Name          string          `json:"name"`
-	OwnerID       uuid.UUID       `json:"owner_id"`
-	Visibility    Visibility      `json:"visibility"`
-	Status        ProjectStatus   `json:"status"`
-	Manifest      json.RawMessage `json:"manifest,omitempty"`
+	ID         uuid.UUID       `json:"id"`
+	Slug       string          `json:"slug"`
+	Name       string          `json:"name"`
+	OwnerID    uuid.UUID       `json:"owner_id"`
+	Visibility Visibility      `json:"visibility"`
+	Status     ProjectStatus   `json:"status"`
+	Manifest   json.RawMessage `json:"manifest,omitempty"`
 	// AllowCIDRs restricts ingress traffic to these CIDR ranges. Empty means
 	// "no restriction". Used as the EFFECTIVE allow-list ONLY when
 	// AccessPreset is null — otherwise the preset's cidrs win. Kept so
 	// projects can opt out of the standardised presets when they need a
 	// one-off list (e.g. demo apps with vendor-specific access).
-	AllowCIDRs    []string        `json:"allow_cidrs"`
+	AllowCIDRs []string `json:"allow_cidrs"`
 	// AccessPreset, when non-empty, names a row in cidr_presets that supplies
 	// the effective allow-list. Lets ops maintain a few canonical lists
 	// ("internal", "public", ...) globally instead of per-project. Null means
 	// "use this project's own AllowCIDRs (custom mode)".
-	AccessPreset  *string         `json:"access_preset,omitempty"`
+	AccessPreset *string `json:"access_preset,omitempty"`
 	// TLSEnabled requests an HTTPS-only Ingress for this project: cert-manager
 	// issues a per-host Let's Encrypt cert via HTTP-01, and Traefik serves it
 	// on :443. Off by default; flip via PATCH /v1/projects/:slug/tls. The
 	// platform needs cert-manager + a `letsencrypt-prod` ClusterIssuer for
 	// this to do anything (deploy/install-cert-manager.sh).
-	TLSEnabled    bool            `json:"tls_enabled"`
+	TLSEnabled bool `json:"tls_enabled"`
 	// APITokenPrefix is the first ~16 chars of the plaintext token, kept for
 	// UI display so owners can recognise which token a teammate has pasted
 	// somewhere. The hash itself is never exposed in JSON; the plaintext is
@@ -104,10 +110,10 @@ type Project struct {
 	// Empty when the project has no API token yet.
 	APITokenPrefix    string     `json:"api_token_prefix,omitempty"`
 	APITokenCreatedAt *time.Time `json:"api_token_created_at,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
-	LastPushedAt  *time.Time      `json:"last_pushed_at,omitempty"`
-	LastActiveAt  *time.Time      `json:"last_active_at,omitempty"`
-	URL           string          `json:"url,omitempty"` // computed
+	CreatedAt         time.Time  `json:"created_at"`
+	LastPushedAt      *time.Time `json:"last_pushed_at,omitempty"`
+	LastActiveAt      *time.Time `json:"last_active_at,omitempty"`
+	URL               string     `json:"url,omitempty"` // computed
 }
 
 // ProjectPathRule overrides the project's default SSO gate for requests whose
@@ -120,9 +126,12 @@ type ProjectPathRule struct {
 	// Mode is one of: "no_auth" (skip ForwardAuth entirely, IP allow-list
 	// still applies) or "token" (require Authorization: Bearer <project api
 	// token>).
-	Mode      string    `json:"mode"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Mode string `json:"mode"`
+	// AllowCIDRs admits these external sources for this prefix only, on top
+	// of the project allow-list. Admin-only; requires token mode.
+	AllowCIDRs []string  `json:"allow_cidrs"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 const (
@@ -130,21 +139,49 @@ const (
 	PathRuleModeToken  = "token"
 )
 
+// ProjectEgressRule is one destination a project's pods are allowed to reach.
+// Admin-maintained: pod egress is deny-by-default and projects declare nothing
+// about it themselves.
+type ProjectEgressRule struct {
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+	// Kind decides which layer enforces the rule, and therefore what the value
+	// is allowed to be. See EgressKindDomain / EgressKindEndpoint.
+	Kind string `json:"kind"`
+	// Domain: a hostname, optionally with a leading dot to include subdomains.
+	// Endpoint: an IP or CIDR in canonical form.
+	Value     string     `json:"value"`
+	Port      int        `json:"port"`
+	Note      string     `json:"note"`
+	CreatedAt time.Time  `json:"created_at"`
+	CreatedBy *uuid.UUID `json:"created_by,omitempty"`
+}
+
+const (
+	// EgressKindDomain is enforced by the egress proxy and only covers
+	// HTTP/HTTPS. A hostname here does nothing for other protocols.
+	EgressKindDomain = "domain"
+	// EgressKindEndpoint is enforced by the project's NetworkPolicy and covers
+	// any TCP port, but only names addresses — NetworkPolicy has no notion of
+	// hostnames.
+	EgressKindEndpoint = "endpoint"
+)
+
 type Deployment struct {
-	ID              uuid.UUID        `json:"id"`
-	ProjectID       uuid.UUID        `json:"project_id"`
-	TriggerType     string           `json:"trigger_type"`
-	TriggeredBy     string           `json:"triggered_by"`
-	Status          DeploymentStatus `json:"status"`
-	SourceBlobKey   string           `json:"source_blob_key,omitempty"`
-	ImageTag        string           `json:"image_tag,omitempty"`
-	Manifest        json.RawMessage  `json:"manifest"`
-	FailureReason   string           `json:"failure_reason,omitempty"`
-	CreatedAt       time.Time        `json:"created_at"`
-	QueuedAt        *time.Time       `json:"queued_at,omitempty"`
-	BuildStartedAt  *time.Time       `json:"build_started_at,omitempty"`
-	BuildDoneAt     *time.Time       `json:"build_done_at,omitempty"`
-	DeployedAt      *time.Time       `json:"deployed_at,omitempty"`
+	ID             uuid.UUID        `json:"id"`
+	ProjectID      uuid.UUID        `json:"project_id"`
+	TriggerType    string           `json:"trigger_type"`
+	TriggeredBy    string           `json:"triggered_by"`
+	Status         DeploymentStatus `json:"status"`
+	SourceBlobKey  string           `json:"source_blob_key,omitempty"`
+	ImageTag       string           `json:"image_tag,omitempty"`
+	Manifest       json.RawMessage  `json:"manifest"`
+	FailureReason  string           `json:"failure_reason,omitempty"`
+	CreatedAt      time.Time        `json:"created_at"`
+	QueuedAt       *time.Time       `json:"queued_at,omitempty"`
+	BuildStartedAt *time.Time       `json:"build_started_at,omitempty"`
+	BuildDoneAt    *time.Time       `json:"build_done_at,omitempty"`
+	DeployedAt     *time.Time       `json:"deployed_at,omitempty"`
 }
 
 type DeploymentEvent struct {
@@ -157,12 +194,12 @@ type DeploymentEvent struct {
 }
 
 type User struct {
-	ID         uuid.UUID `json:"id"`
-	KCSub      string    `json:"kc_sub,omitempty"`
-	Email      string    `json:"email"`
-	Name       string    `json:"name,omitempty"`
-	IsAdmin    bool      `json:"is_admin"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID         uuid.UUID  `json:"id"`
+	KCSub      string     `json:"kc_sub,omitempty"`
+	Email      string     `json:"email"`
+	Name       string     `json:"name,omitempty"`
+	IsAdmin    bool       `json:"is_admin"`
+	CreatedAt  time.Time  `json:"created_at"`
 	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
 }
 
@@ -184,11 +221,11 @@ type DeployToken struct {
 // CIDR list. The two system presets (`public`, `internal`) are seeded by
 // migration 0005 and can't be deleted (is_system=true).
 type CIDRPreset struct {
-	Name        string     `json:"name"`        // slug, also the API key
-	Label       string     `json:"label"`       // display name shown in the UI dropdown
+	Name        string     `json:"name"`  // slug, also the API key
+	Label       string     `json:"label"` // display name shown in the UI dropdown
 	Description string     `json:"description"`
-	CIDRs       []string   `json:"cidrs"`       // empty = "no restriction"
-	IsSystem    bool       `json:"is_system"`   // system presets refuse DELETE
+	CIDRs       []string   `json:"cidrs"`     // empty = "no restriction"
+	IsSystem    bool       `json:"is_system"` // system presets refuse DELETE
 	UpdatedAt   time.Time  `json:"updated_at"`
 	UpdatedBy   *uuid.UUID `json:"updated_by,omitempty"`
 }

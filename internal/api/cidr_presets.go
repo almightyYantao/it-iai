@@ -99,6 +99,12 @@ func (s *Server) handlePutCIDRPreset(w http.ResponseWriter, r *http.Request) {
 
 	// Re-sync every project pointing at this preset so the new CIDR list
 	// reaches the cluster without each project owner having to redeploy.
+	if name == "internal" && s.deployer != nil {
+		if err := s.syncPlatformAllowList(ctx); err != nil {
+			writeJSON(w, http.StatusOK, map[string]any{"preset": preset, "warn_resync": "platform allow-list: " + err.Error()})
+			return
+		}
+	}
 	if err := s.resyncProjectsUsingPreset(ctx, name); err != nil {
 		// Persisted, but cluster fan-out failed — surface the warning. The
 		// preset itself is saved, so the worst case is admins re-PATCH later.
@@ -185,4 +191,18 @@ func (s *Server) resyncProjectsUsingPreset(ctx context.Context, name string) err
 		}
 	}
 	return firstErr
+}
+
+// syncPlatformAllowList mirrors the `internal` preset onto the admin-ui /
+// oauth2-proxy allow-list. Run at startup so a fresh deploy never leaves the
+// platform entrypoints referencing a missing Middleware.
+func (s *Server) syncPlatformAllowList(ctx context.Context) error {
+	if s.deployer == nil {
+		return nil
+	}
+	var cidrs []string
+	if pr, err := s.store.GetCIDRPreset(ctx, "internal"); err == nil && pr != nil && !hasWorldCIDR(pr.CIDRs) {
+		cidrs = pr.CIDRs
+	}
+	return s.deployer.SyncPlatformAllowList(ctx, cidrs)
 }

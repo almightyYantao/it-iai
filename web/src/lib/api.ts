@@ -144,7 +144,7 @@ export const api = {
       "GET",
       `/v1/projects/${encodeURIComponent(slug)}/path-rules`,
     ),
-  createProjectPathRule: (slug: string, body: { path_prefix: string; mode: "no_auth" | "token" }) =>
+  createProjectPathRule: (slug: string, body: { path_prefix: string; mode: "no_auth" | "token"; allow_cidrs?: string[] }) =>
     request<{ rule: import("./types").ProjectPathRule }>(
       "POST",
       `/v1/projects/${encodeURIComponent(slug)}/path-rules`,
@@ -153,7 +153,7 @@ export const api = {
   updateProjectPathRule: (
     slug: string,
     id: string,
-    body: { path_prefix: string; mode: "no_auth" | "token" },
+    body: { path_prefix: string; mode: "no_auth" | "token"; allow_cidrs?: string[] },
   ) =>
     request<{ rule: import("./types").ProjectPathRule }>(
       "PATCH",
@@ -166,13 +166,14 @@ export const api = {
       `/v1/projects/${encodeURIComponent(slug)}/path-rules/${encodeURIComponent(id)}`,
     ),
 
-  // setProjectVisibility switches between the three SSO-gating modes:
+  // setProjectVisibility switches between the two SSO-gating modes:
   //   - "org"        any Longbridge SSO user can reach the URL.
   //   - "restricted" Longbridge SSO + project collaborator allow-list.
-  //   - "public"     no SSO at all (open to anyone on the network).
+  // "public" (no SSO at all) was withdrawn — the platform is internal-access-
+  // only and the server now rejects it with visibility_public_withdrawn.
   // Server re-syncs the ingress immediately so the change is live within
   // ~1s on the cluster.
-  setProjectVisibility: (slug: string, visibility: "org" | "restricted" | "public") =>
+  setProjectVisibility: (slug: string, visibility: "org" | "restricted") =>
     request<{ ok: boolean; visibility: string }>(
       "PATCH",
       `/v1/projects/${encodeURIComponent(slug)}/visibility`,

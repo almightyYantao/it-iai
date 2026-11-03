@@ -96,12 +96,24 @@ func runServer() {
 	if registryHostFromCluster == "" {
 		registryHostFromCluster = cfg.RegistryHost
 	}
+	// What a user pod is allowed to reach on the platform host. Anything else
+	// published there (registry, control-plane DB, control-plane API) is denied
+	// by the per-project egress policy the deployer writes.
+	platformEndpoints := []string{}
+	for _, ep := range []string{cfg.UserPGPublicHost, cfg.UserRedisPublicHost, cfg.UserS3PublicHost, cfg.S3PublicEndpoint} {
+		if ep != "" {
+			platformEndpoints = append(platformEndpoints, ep)
+		}
+	}
 	dep, err := k8sdriver.New(k8sdriver.DeployerOpts{
-		Kubeconfig:              cfg.Kubeconfig,
-		BaseDomain:              cfg.AppBaseDomain,
-		IngressClass:            cfg.IngressClass,
-		TLSClusterIssuer:        cfg.TLSClusterIssuer,
-		RegistryHostFromCluster: registryHostFromCluster,
+		Kubeconfig:               cfg.Kubeconfig,
+		BaseDomain:               cfg.AppBaseDomain,
+		IngressClass:             cfg.IngressClass,
+		TLSClusterIssuer:         cfg.TLSClusterIssuer,
+		RegistryHostFromCluster:  registryHostFromCluster,
+		PlatformServiceEndpoints: platformEndpoints,
+		DNSClusterIP:             cfg.DNSClusterIP,
+		AvoidControlPlaneNodes:   cfg.AvoidControlPlaneNodes,
 	})
 	if err != nil {
 		log.Printf("k8s driver disabled: %v (control plane will run but Apply will fail)", err)
@@ -115,6 +127,10 @@ func runServer() {
 		// (or any DB → cluster drift) gets reflected without waiting on a
 		// redeploy. Runs in the background to avoid delaying the HTTP listen.
 		go server.SweepIngressesAtStartup(ctx)
+		// Same idea for the egress proxy: rebuild its config from the DB so a
+		// change made while the control plane was down (or a hand-edited
+		// ConfigMap) converges without waiting for the next allow-list edit.
+		go server.SweepEgressProxyAtStartup(ctx)
 	}
 
 	httpSrv := &http.Server{

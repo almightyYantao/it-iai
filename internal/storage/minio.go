@@ -53,10 +53,17 @@ func New(opts Options) (*Client, error) {
 	}
 	public := internal
 	if opts.PublicEndpoint != "" && opts.PublicEndpoint != opts.Endpoint {
+		// Force path-style (bucket in the URI, not the hostname). The public
+		// endpoint is now a plain hostname served by the admin UI's nginx, which
+		// routes uploads by the /<bucket>/ prefix — virtual-host style would
+		// produce bucket.host URLs that neither DNS nor that location matches.
+		// Auto-detection happens to pick path-style for non-AWS hosts today; say
+		// it explicitly since the reverse proxy depends on it.
 		p, err := minio.New(opts.PublicEndpoint, &minio.Options{
-			Creds:  credentials.NewStaticV4(opts.AccessKey, opts.SecretKey, ""),
-			Secure: opts.PublicUseSSL,
-			Region: opts.Region,
+			Creds:        credentials.NewStaticV4(opts.AccessKey, opts.SecretKey, ""),
+			Secure:       opts.PublicUseSSL,
+			Region:       opts.Region,
+			BucketLookup: minio.BucketLookupPath,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("init public minio client: %w", err)
