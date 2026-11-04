@@ -146,6 +146,8 @@ type ApplyInput struct {
 	// ProxyURL, when set, is injected as HTTP(S)_PROXY with a NO_PROXY for
 	// cluster and platform addresses.
 	ProxyURL string
+	// Quota: requests/limits after per-project and platform defaults.
+	Quota Quota
 }
 
 // Litestream defaults — kept as package-level constants so the init / sidecar
@@ -572,15 +574,6 @@ func (d *Deployer) applyDeployment(ctx context.Context, in ApplyInput) error {
 		image = rewriteImageHost(image, d.registryHostFromCluster)
 	}
 
-	cpu := in.CPU
-	if cpu == "" {
-		cpu = "1"
-	}
-	mem := in.Memory
-	if mem == "" {
-		mem = "2Gi"
-	}
-
 	appContainer := corev1.Container{
 		Name:  "app",
 		Image: image,
@@ -593,16 +586,7 @@ func (d *Deployer) applyDeployment(ctx context.Context, in ApplyInput) error {
 			{Name: "VIBEDEPLOY_PROJECT", Value: in.Slug},
 			{Name: "VIBEDEPLOY_URL", Value: fmt.Sprintf("https://%s.%s", in.Slug, d.baseDomain)},
 		},
-		Resources: corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("100m"),
-				corev1.ResourceMemory: resource.MustParse(appMemRequest),
-			},
-			Limits: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse(cpu),
-				corev1.ResourceMemory: resource.MustParse(mem),
-			},
-		},
+		Resources: in.Quota.withManifest(in.CPU, in.Memory).requirements(),
 		ReadinessProbe: &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt(in.Port)},
@@ -1565,7 +1549,7 @@ func withProxyEnv(env []corev1.EnvVar, proxyURL, noProxy string) []corev1.EnvVar
 
 // SetProxyEnv rewrites the proxy env on the project's running Deployment
 // (a rollout). No Deployment yet is fine: the next Apply injects it.
-func (d *Deployer) SetProxyEnv(ctx context.Context, slug, proxyURL string) error {
+func (d *Deployer) SetProxyEnv(ctx context.Context, slug, proxyURL string, q Quota) error {
 	api := d.cs.AppsV1().Deployments(d.namespaceFor(slug))
 	dep, err := api.Get(ctx, "app", metav1.GetOptions{})
 	if apierr.IsNotFound(err) {
@@ -1583,10 +1567,7 @@ func (d *Deployer) SetProxyEnv(ctx context.Context, slug, proxyURL string) error
 	for i := range dep.Spec.Template.Spec.Containers {
 		if dep.Spec.Template.Spec.Containers[i].Name == "app" {
 			c := &dep.Spec.Template.Spec.Containers[i]
-			if c.Resources.Requests == nil {
-				c.Resources.Requests = corev1.ResourceList{}
-			}
-			c.Resources.Requests[corev1.ResourceMemory] = resource.MustParse(appMemRequest)
+			c.Resources = q.requirements()
 			c.Env = withProxyEnv(c.Env, proxyURL, d.noProxy())
 		}
 	}
@@ -1594,6 +1575,58 @@ func (d *Deployer) SetProxyEnv(ctx context.Context, slug, proxyURL string) error
 	return err
 }
 
-// appMemRequest is what each project pod reserves for scheduling. Most use a
-// few dozen MiB; 200Mi filled both 7.4G agents at ~35 pods each.
-const appMemRequest = "100Mi"
+// Quota is a pod's requests (what the scheduler reserves) and limits (the
+// ceiling). Empty fields fall back to the built-in defaults.
+type Quota struct {
+	CPURequest string `json:"cpu_request"`
+	MemRequest string `json:"mem_request"`
+	CPULimit   string `json:"cpu_limit"`
+	MemLimit   string `json:"mem_limit"`
+}
+
+// Built-in defaults. 100Mi request: most pods use a few dozen MiB, and 200Mi
+// filled both 7.4G agents at ~35 pods each.
+var DefaultQuota = Quota{CPURequest: "100m", MemRequest: "100Mi", CPULimit: "1", MemLimit: "2Gi"}
+
+// Merge fills empty fields of q from fallback.
+func (q Quota) Merge(fallback Quota) Quota {
+	if q.CPURequest == "" {
+		q.CPURequest = fallback.CPURequest
+	}
+	if q.MemRequest == "" {
+		q.MemRequest = fallback.MemRequest
+	}
+	if q.CPULimit == "" {
+		q.CPULimit = fallback.CPULimit
+	}
+	if q.MemLimit == "" {
+		q.MemLimit = fallback.MemLimit
+	}
+	return q
+}
+
+// withManifest lets the project's manifest limits fill in when no quota set them.
+func (q Quota) withManifest(cpu, mem string) Quota {
+	return q.Merge(Quota{CPULimit: cpu, MemLimit: mem})
+}
+
+func parseOr(v, def string) resource.Quantity {
+	if q, err := resource.ParseQuantity(v); err == nil {
+		return q
+	}
+	return resource.MustParse(def)
+}
+
+func (q Quota) requirements() corev1.ResourceRequirements {
+	q = q.Merge(DefaultQuota)
+	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    parseOr(q.CPURequest, DefaultQuota.CPURequest),
+			corev1.ResourceMemory: parseOr(q.MemRequest, DefaultQuota.MemRequest),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    parseOr(q.CPULimit, DefaultQuota.CPULimit),
+			corev1.ResourceMemory: parseOr(q.MemLimit, DefaultQuota.MemLimit),
+		},
+	}
+}

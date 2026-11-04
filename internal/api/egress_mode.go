@@ -54,7 +54,7 @@ func (s *Server) handlePatchEgressMode(w http.ResponseWriter, r *http.Request) {
 			err = s.deployer.SyncEgressPolicy(ctx, p.Slug, allows, enforce)
 		}
 		if err == nil {
-			err = s.deployer.SetProxyEnv(ctx, p.Slug, proxyURL)
+			err = s.deployer.SetProxyEnv(ctx, p.Slug, proxyURL, s.quotaFor(ctx, p.ID))
 		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "egress_sync", err.Error())
@@ -396,7 +396,7 @@ func (s *Server) SweepEgressModesAtStartup(ctx context.Context) {
 		return
 	}
 	rows, err := s.store.Pool.Query(ctx,
-		`SELECT id, slug FROM projects WHERE deleted_at IS NULL AND egress_mode <> 'off' ORDER BY slug`)
+		`SELECT id, slug, egress_mode FROM projects WHERE deleted_at IS NULL AND (egress_mode <> 'off' OR egress_proxy_port IS NOT NULL) ORDER BY slug`)
 	if err != nil {
 		log.Printf("egress mode sweep: %v", err)
 		return
@@ -404,16 +404,20 @@ func (s *Server) SweepEgressModesAtStartup(ctx context.Context) {
 	type pr struct {
 		id   uuid.UUID
 		slug string
+		mode string
 	}
 	var ps []pr
 	for rows.Next() {
 		var x pr
-		if rows.Scan(&x.id, &x.slug) == nil {
+		if rows.Scan(&x.id, &x.slug, &x.mode) == nil {
 			ps = append(ps, x)
 		}
 	}
 	rows.Close()
 	for _, p := range ps {
+		if p.mode == "off" {
+			continue
+		}
 		if _, err := s.store.EnsureEgressProxyPort(ctx, p.id); err != nil {
 			log.Printf("egress mode sweep %s: port: %v", p.slug, err)
 		}
@@ -429,7 +433,7 @@ func (s *Server) SweepEgressModesAtStartup(ctx context.Context) {
 			err = s.deployer.SyncEgressPolicy(ctx, p.slug, allows, enforce)
 		}
 		if err == nil {
-			err = s.deployer.SetProxyEnv(ctx, p.slug, proxyURL)
+			err = s.deployer.SetProxyEnv(ctx, p.slug, proxyURL, s.quotaFor(ctx, p.id))
 		}
 		if err != nil {
 			log.Printf("egress mode sweep %s: %v", p.slug, err)

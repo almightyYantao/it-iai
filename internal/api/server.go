@@ -115,6 +115,8 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/alerts/settings", s.handleGetAlertSettings)
 			r.Put("/alerts/settings", s.handlePutAlertSettings)
 			r.Post("/alerts/test", s.handleTestAlert)
+			r.Get("/quota-defaults", s.handleGetQuotaDefaults)
+			r.Put("/quota-defaults", s.handlePutQuotaDefaults)
 			r.Get("/cidr-presets", s.handleListCIDRPresets)
 			r.Put("/cidr-presets/{name}", s.handlePutCIDRPreset)
 			r.Delete("/cidr-presets/{name}", s.handleDeleteCIDRPreset)
@@ -140,6 +142,8 @@ func (s *Server) Routes() http.Handler {
 				r.Get("/egress-mode", s.handleGetEgressMode)
 				r.Patch("/egress-mode", s.handlePatchEgressMode)
 				r.Get("/egress-report", s.handleEgressReport)
+				r.Get("/quota", s.handleGetProjectQuota)
+				r.Put("/quota", s.handlePutProjectQuota)
 				r.Route("/path-rules", func(r chi.Router) {
 					r.Get("/", s.handleListPathRules)
 					r.Post("/", s.handleCreatePathRule)

@@ -303,6 +303,7 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 			EgressAllows:  egressAllows,
 			EgressEnforce: egressEnforce,
 			ProxyURL:      proxyURL,
+			Quota:         r.srv.quotaFor(ctx, p.ProjectID),
 		}); err != nil {
 			r.fail(ctx, p.ID, "k8s_apply", err.Error())
 			return

@@ -1,3 +1,4 @@
+import { QuotaDefaults } from "../components/QuotaEditor";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -23,13 +24,14 @@ function Spark({ pts }: { pts: number[] }) {
 }
 
 export function Ops() {
-  const [tab, setTab] = useState<"overview" | "agents" | "alerts">("overview");
+  const [tab, setTab] = useState<"overview" | "agents" | "quota" | "alerts">("overview");
   return (
     <PageContainer>
       <PageHeader title="运维监控" description="节点、平台服务和项目容器的实时状态，每 10 秒刷新。" actions={
-        <Tabs value={tab} onChange={setTab} options={[{ value: "overview", label: "概况" }, { value: "agents", label: "Agent 管理" }, { value: "alerts", label: "告警通知" }]} />} />
+        <Tabs value={tab} onChange={setTab} options={[{ value: "overview", label: "概况" }, { value: "agents", label: "Agent 管理" }, { value: "quota", label: "默认配额" }, { value: "alerts", label: "告警通知" }]} />} />
       {tab === "overview" && <Overview />}
       {tab === "agents" && <Agents />}
+      {tab === "quota" && <QuotaDefaults />}
       {tab === "alerts" && <AlertSettings />}
     </PageContainer>
   );

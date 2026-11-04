@@ -1,0 +1,1 @@
+ALTER TABLE projects DROP COLUMN IF EXISTS cpu_request, DROP COLUMN IF EXISTS mem_request, DROP COLUMN IF EXISTS cpu_limit, DROP COLUMN IF EXISTS mem_limit;

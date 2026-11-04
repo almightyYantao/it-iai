@@ -1,4 +1,4 @@
-import type { EgressMode, EgressProxyStatus, EgressRule } from "./types";
+import type { EgressMode, EgressProxyStatus, EgressRule, Quota } from "./types";
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import type {
   AdminUser,
@@ -191,6 +191,10 @@ export const api = {
     request<{ mode: EgressMode; port: number; can_edit: boolean }>("GET", `/v1/projects/${encodeURIComponent(slug)}/egress-mode`),
   setEgressMode: (slug: string, mode: EgressMode) =>
     request<{ mode: EgressMode }>("PATCH", `/v1/projects/${encodeURIComponent(slug)}/egress-mode`, { mode }),
+  quotaDefaults: () => request<{ defaults: Quota; builtin: Quota }>("GET", "/v1/admin/quota-defaults"),
+  putQuotaDefaults: (q: Quota) => request<unknown>("PUT", "/v1/admin/quota-defaults", q),
+  projectQuota: (slug: string) => request<{ override: Quota; effective: Quota; can_edit: boolean }>("GET", `/v1/projects/${encodeURIComponent(slug)}/quota`),
+  putProjectQuota: (slug: string, q: Quota) => request<unknown>("PUT", `/v1/projects/${encodeURIComponent(slug)}/quota`, q),
   ops: () => request<any>("GET", "/v1/admin/ops"),
   opsHistory: (hours = 1) => request<{ series: Record<string, { ts: string; cpu: number; mem: number }[]> }>("GET", `/v1/admin/ops/history?hours=${hours}`),
   agentJoins: () => request<{ joins: any[]; configured: boolean }>("GET", "/v1/admin/agents/join"),

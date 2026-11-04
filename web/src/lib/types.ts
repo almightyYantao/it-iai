@@ -231,3 +231,5 @@ export interface EgressRule {
   port: number;
   note: string;
 }
+
+export interface Quota { cpu_request: string; mem_request: string; cpu_limit: string; mem_limit: string }

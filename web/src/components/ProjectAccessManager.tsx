@@ -1,3 +1,4 @@
+import { ProjectQuotaPanel } from "./QuotaEditor";
 import { toast } from "sonner";
 import { confirmDialog } from "./ui/confirm";
 import { EgressModePanel } from "./EgressProxy";
@@ -166,6 +167,8 @@ function ProjectPane({ project, presets, notify }: { project: Project; presets: 
           }))}
         />
       </div>
+
+      <ProjectQuotaPanel slug={project.slug} />
 
       <EgressModePanel slug={project.slug} notify={notify} />
 
