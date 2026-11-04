@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -81,9 +82,13 @@ func (s *Server) handleAdminProjects(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePager(r, 10, 200)
 	ctx := r.Context()
 
+	// ?q= matches slug, display name or owner email (case-insensitive).
+	search := "%" + strings.TrimSpace(r.URL.Query().Get("q")) + "%"
 	var total int
 	if err := s.store.Pool.QueryRow(ctx,
-		`SELECT count(1) FROM projects WHERE deleted_at IS NULL`,
+		`SELECT count(1) FROM projects p LEFT JOIN users u ON u.id = p.owner_id
+		  WHERE p.deleted_at IS NULL
+		    AND (p.slug ILIKE $1 OR p.name ILIKE $1 OR coalesce(u.email, '') ILIKE $1)`, search,
 	).Scan(&total); err != nil {
 		writeError(w, http.StatusInternalServerError, "db", err.Error())
 		return
@@ -96,10 +101,11 @@ func (s *Server) handleAdminProjects(w http.ResponseWriter, r *http.Request) {
 		FROM projects p
 		LEFT JOIN users u ON u.id = p.owner_id
 		WHERE p.deleted_at IS NULL
+		  AND (p.slug ILIKE $3 OR p.name ILIKE $3 OR coalesce(u.email, '') ILIKE $3)
 		ORDER BY p.created_at DESC
 		LIMIT $1 OFFSET $2
 	`
-	rows, err := s.store.Pool.Query(ctx, q, limit, offset)
+	rows, err := s.store.Pool.Query(ctx, q, limit, offset, search)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "db", err.Error())
 		return

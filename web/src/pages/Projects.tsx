@@ -11,7 +11,7 @@ import { EmptyState, ErrorState, LoadingRows } from "../components/States";
 import { Pagination, type PaginationState } from "../components/Pagination";
 import { ExternalIcon, LayersIcon } from "../components/icons";
 import { timeAgo } from "../lib/format";
-import { Card } from "../components/ui";
+import { Card, Input } from "../components/ui";
 
 type Scope = "all" | "mine";
 
@@ -21,20 +21,29 @@ export function Projects() {
 
   const [scope, setScope] = useState<Scope>("all");
   const [pg, setPg] = useState<PaginationState>({ page: 1, pageSize: 10 });
+  const [search, setSearch] = useState("");
+  const [kw, setKw] = useState("");
 
-  // Reset to page 1 when scope toggles — different result set.
+  // Debounce typing so each keystroke doesn't hit the API.
+  useEffect(() => {
+    const id = window.setTimeout(() => setKw(search.trim()), 250);
+    return () => window.clearTimeout(id);
+  }, [search]);
+
+  // Reset to page 1 when scope or search changes — different result set.
   useEffect(() => {
     setPg((s) => ({ ...s, page: 1 }));
-  }, [scope]);
+  }, [scope, kw]);
 
   const q = useQuery({
-    queryKey: ["projects", scope, pg.page, pg.pageSize],
+    queryKey: ["projects", scope, kw, pg.page, pg.pageSize],
     queryFn: () => {
       const offset = (pg.page - 1) * pg.pageSize;
       return scope === "all"
-        ? api.listAllProjects(pg.pageSize, offset)
-        : api.listMyProjects(pg.pageSize, offset);
+        ? api.listAllProjects(pg.pageSize, offset, kw)
+        : api.listMyProjects(pg.pageSize, offset, kw);
     },
+    placeholderData: (prev) => prev,
     refetchInterval: 5000,
   });
 
@@ -45,6 +54,15 @@ export function Projects() {
         title={t("projects.title")}
         description={scope === "all" ? t("projects.description.all") : t("projects.description.mine")}
         actions={
+          <>
+          <div className="relative">
+            <svg className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-ink-faint" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" strokeLinecap="round" />
+            </svg>
+            <Input className="w-64 pl-8" placeholder={t("projects.search")} value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setSearch("")} />
+          </div>
           <SegmentedControl
             value={scope}
             onChange={setScope}
@@ -53,6 +71,7 @@ export function Projects() {
               { value: "all", label: t("projects.toggle.all") },
             ]}
           />
+          </>
         }
       />
 
@@ -71,7 +90,11 @@ export function Projects() {
 
       {q.isLoading && <LoadingRows rows={4} cols={4} />}
 
-      {q.data && (q.data.projects?.length ?? 0) === 0 && pg.page === 1 && (
+      {q.data && (q.data.projects?.length ?? 0) === 0 && pg.page === 1 && kw && (
+        <EmptyState icon={<LayersIcon className="size-7" />} title={t("projects.search.empty", { q: kw })} />
+      )}
+
+      {q.data && (q.data.projects?.length ?? 0) === 0 && pg.page === 1 && !kw && (
         <EmptyState
           icon={<LayersIcon className="size-7" />}
           title={t("projects.empty.title")}

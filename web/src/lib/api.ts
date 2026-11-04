@@ -76,10 +76,10 @@ export const api = {
   whoami: () => request<Whoami>("GET", "/v1/whoami"),
   metrics: () => request<Metrics>("GET", "/v1/admin/metrics"),
 
-  listMyProjects: (limit = 10, offset = 0) =>
-    request<ListResp<"projects", Project>>("GET", `/v1/projects?${pg(limit, offset)}`),
-  listAllProjects: (limit = 10, offset = 0) =>
-    request<ListResp<"projects", Project>>("GET", `/v1/admin/projects?${pg(limit, offset)}`),
+  listMyProjects: (limit = 10, offset = 0, q = "") =>
+    request<ListResp<"projects", Project>>("GET", `/v1/projects?${pg(limit, offset)}${q ? `&q=${encodeURIComponent(q)}` : ""}`),
+  listAllProjects: (limit = 10, offset = 0, q = "") =>
+    request<ListResp<"projects", Project>>("GET", `/v1/admin/projects?${pg(limit, offset)}${q ? `&q=${encodeURIComponent(q)}` : ""}`),
   getProject: (slug: string) =>
     request<{ project: Project; pod?: PodPlacement }>("GET", `/v1/projects/${encodeURIComponent(slug)}`),
   deleteProject: (slug: string) =>

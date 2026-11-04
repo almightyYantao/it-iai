@@ -200,6 +200,15 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "db", err.Error())
 		return
 	}
+	if kw := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q"))); kw != "" {
+		kept := list[:0]
+		for _, p := range list {
+			if strings.Contains(strings.ToLower(p.Slug), kw) || strings.Contains(strings.ToLower(p.Name), kw) {
+				kept = append(kept, p)
+			}
+		}
+		list = kept
+	}
 	for _, p := range list {
 		p.URL = s.projectURL(p.Slug)
 	}

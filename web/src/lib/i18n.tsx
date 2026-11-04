@@ -11,6 +11,8 @@ type Dict = Record<string, string>;
 const STORAGE_KEY = "iai.locale";
 
 const zh: Dict = {
+  "projects.search": "搜索项目名、slug 或负责人",
+  "projects.search.empty": "没有匹配「{{q}}」的项目",
   "nav.ops": "运维监控",
   "ew.anyport": "任意端口",
   "ew.title": "出站白名单",
@@ -681,6 +683,8 @@ const zh: Dict = {
 };
 
 const en: Dict = {
+  "projects.search": "Search name, slug or owner",
+  "projects.search.empty": "No projects match \u201c{{q}}\u201d",
   "nav.ops": "Ops",
   "ew.anyport": "any",
   "ew.title": "Egress allow-list",
