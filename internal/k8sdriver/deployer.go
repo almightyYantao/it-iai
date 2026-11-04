@@ -596,7 +596,7 @@ func (d *Deployer) applyDeployment(ctx context.Context, in ApplyInput) error {
 		Resources: corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("100m"),
-				corev1.ResourceMemory: resource.MustParse("200Mi"),
+				corev1.ResourceMemory: resource.MustParse(appMemRequest),
 			},
 			Limits: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse(cpu),
@@ -1583,9 +1583,17 @@ func (d *Deployer) SetProxyEnv(ctx context.Context, slug, proxyURL string) error
 	for i := range dep.Spec.Template.Spec.Containers {
 		if dep.Spec.Template.Spec.Containers[i].Name == "app" {
 			c := &dep.Spec.Template.Spec.Containers[i]
+			if c.Resources.Requests == nil {
+				c.Resources.Requests = corev1.ResourceList{}
+			}
+			c.Resources.Requests[corev1.ResourceMemory] = resource.MustParse(appMemRequest)
 			c.Env = withProxyEnv(c.Env, proxyURL, d.noProxy())
 		}
 	}
 	_, err = api.Update(ctx, dep, metav1.UpdateOptions{})
 	return err
 }
+
+// appMemRequest is what each project pod reserves for scheduling. Most use a
+// few dozen MiB; 200Mi filled both 7.4G agents at ~35 pods each.
+const appMemRequest = "100Mi"
