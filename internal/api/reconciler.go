@@ -304,6 +304,7 @@ func (r *Reconciler) handle(ctx context.Context, p pendingDeploy) {
 			EgressEnforce: egressEnforce,
 			ProxyURL:      proxyURL,
 			Quota:         r.srv.quotaFor(ctx, p.ProjectID),
+			Volumes:       r.srv.projectVolumes(ctx, p.ProjectID),
 		}); err != nil {
 			r.fail(ctx, p.ID, "k8s_apply", err.Error())
 			return

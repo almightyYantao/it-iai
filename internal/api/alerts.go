@@ -1,12 +1,15 @@
 package api
 
 import (
+	"net/url"
+
 	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/iai/vibedeploy/internal/k8sdriver"
 	"log"
 	"net/http"
 	"regexp"
@@ -21,15 +24,18 @@ const (
 	cfgSlackWebhook  = "alert.slack_webhook_enc"
 	cfgSlackEnabled  = "alert.slack_enabled"
 	cfgDashboardURL  = "alert.dashboard_url"
+	cfgSlackBot      = "alert.slack_bot_enc"
 	alertRemindEvery = 30 * time.Minute
 )
 
 var slackAAD = []byte("system_config/alert.slack_webhook")
+var slackBotAAD = []byte("system_config/alert.slack_bot")
 var digitsRe = regexp.MustCompile(`[0-9.]+%?`)
 
 func alertKey(a opsAlert) string { return a.Target + "|" + digitsRe.ReplaceAllString(a.Text, "#") }
 
 type alertSettings struct {
+	BotToken  string
 	Webhook   string
 	Enabled   bool
 	Dashboard string
@@ -38,6 +44,13 @@ type alertSettings struct {
 func (s *Server) loadAlertSettings(ctx context.Context) alertSettings {
 	cfg, _ := s.store.GetSystemConfig(ctx)
 	st := alertSettings{Enabled: cfg[cfgSlackEnabled] == "true", Dashboard: cfg[cfgDashboardURL]}
+	if enc := cfg[cfgSlackBot]; enc != "" && s.kek != nil {
+		if ct, err := base64.StdEncoding.DecodeString(enc); err == nil {
+			if pt, err := s.kek.Decrypt(ct, slackBotAAD); err == nil {
+				st.BotToken = string(pt)
+			}
+		}
+	}
 	if enc := cfg[cfgSlackWebhook]; enc != "" && s.kek != nil {
 		if ct, err := base64.StdEncoding.DecodeString(enc); err == nil {
 			if pt, err := s.kek.Decrypt(ct, slackAAD); err == nil {
@@ -139,6 +152,9 @@ func (s *Server) RunAlertNotifier(ctx context.Context, interval time.Duration) {
 		if err := s.notifyOnce(ctx); err != nil {
 			log.Printf("alert notifier: %v", err)
 		}
+		if err := s.notifyCrashes(ctx); err != nil {
+			log.Printf("crash notifier: %v", err)
+		}
 	}
 }
 
@@ -201,7 +217,7 @@ func (s *Server) handleGetAlertSettings(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	st := s.loadAlertSettings(r.Context())
-	writeJSON(w, http.StatusOK, map[string]any{"configured": st.Webhook != "", "enabled": st.Enabled, "dashboard_url": st.Dashboard})
+	writeJSON(w, http.StatusOK, map[string]any{"configured": st.Webhook != "", "bot_configured": st.BotToken != "", "enabled": st.Enabled, "dashboard_url": st.Dashboard})
 }
 
 // PUT /v1/admin/alerts/settings {"webhook_url"?: "...", "enabled": bool, "dashboard_url": "..."}
@@ -214,6 +230,7 @@ func (s *Server) handlePutAlertSettings(w http.ResponseWriter, r *http.Request) 
 	}
 	var body struct {
 		WebhookURL   *string `json:"webhook_url"`
+		BotToken     *string `json:"bot_token"`
 		Enabled      bool    `json:"enabled"`
 		DashboardURL string  `json:"dashboard_url"`
 	}
@@ -241,6 +258,27 @@ func (s *Server) handlePutAlertSettings(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 			kv[cfgSlackWebhook] = base64.StdEncoding.EncodeToString(ct)
+		}
+	}
+	if body.BotToken != nil {
+		t := strings.TrimSpace(*body.BotToken)
+		if t == "" {
+			kv[cfgSlackBot] = ""
+		} else {
+			if !strings.HasPrefix(t, "xoxb-") {
+				writeError(w, http.StatusBadRequest, "bad_bot_token", "expected a Slack bot token (xoxb-...)")
+				return
+			}
+			if s.kek == nil {
+				writeError(w, http.StatusInternalServerError, "no_kek", "KEK not configured")
+				return
+			}
+			ct, err := s.kek.Encrypt([]byte(t), slackBotAAD)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, "encrypt", err.Error())
+				return
+			}
+			kv[cfgSlackBot] = base64.StdEncoding.EncodeToString(ct)
 		}
 	}
 	if err := s.store.BulkSetSystemConfig(r.Context(), kv, nil); err != nil {
@@ -272,4 +310,133 @@ func (s *Server) handleTestAlert(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// ---- Slack bot (DMs to project owners) --------------------------------------
+
+func slackAPI(ctx context.Context, token, method string, body any) (map[string]any, error) {
+	b, _ := json.Marshal(body)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://slack.com/api/"+method, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var out map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	if ok, _ := out["ok"].(bool); !ok {
+		return out, fmt.Errorf("slack %s: %v", method, out["error"])
+	}
+	return out, nil
+}
+
+// dmByEmail sends attachments to the Slack user with that email.
+func dmByEmail(ctx context.Context, token, email string, atts []slackAttachment) error {
+	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx2, http.MethodGet, "https://slack.com/api/users.lookupByEmail?email="+url.QueryEscape(email), nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	var u struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+		User  struct {
+			ID string `json:"id"`
+		} `json:"user"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&u)
+	resp.Body.Close()
+	if !u.OK {
+		return fmt.Errorf("lookup %s: %s", email, u.Error)
+	}
+	_, err = slackAPI(ctx, token, "chat.postMessage", map[string]any{"channel": u.User.ID, "attachments": atts, "text": atts[0].Fallback})
+	return err
+}
+
+// ---- Crash alerts ---------------------------------------------------------------
+
+// notifyCrashes posts one attachment per new container crash to the channel
+// and DMs the project owner when a bot token is configured. crash_events
+// dedupes, so each termination is announced once even across restarts.
+func (s *Server) notifyCrashes(ctx context.Context) error {
+	if s.deployer == nil {
+		return nil
+	}
+	crashes, err := s.deployer.RecentCrashes(ctx, time.Now().Add(-15*time.Minute))
+	if err != nil {
+		return err
+	}
+	st := s.loadAlertSettings(ctx)
+	for _, c := range crashes {
+		tag, err := s.store.Pool.Exec(ctx, `INSERT INTO crash_events (pod_uid, container, finished_at, slug, reason, exit_code)
+			VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, c.PodUID, c.Container, c.FinishedAt, c.Slug, c.Reason, c.ExitCode)
+		if err != nil || tag.RowsAffected() == 0 || !st.Enabled {
+			continue
+		}
+		var owner string
+		_ = s.store.Pool.QueryRow(ctx, `SELECT coalesce(u.email,'') FROM projects p LEFT JOIN users u ON u.id = p.owner_id
+			WHERE p.slug = $1 AND p.deleted_at IS NULL`, c.Slug).Scan(&owner)
+		att := crashAttachment(c, owner, st.Dashboard, s.deployer.PreviousLogTail(ctx, c.Slug, c.Pod, c.Container, 15))
+		if st.Webhook != "" {
+			if err := postSlack(ctx, st.Webhook, []slackAttachment{att}); err != nil {
+				log.Printf("crash alert: %v", err)
+			}
+		}
+		if st.BotToken != "" && owner != "" {
+			if err := dmByEmail(ctx, st.BotToken, owner, []slackAttachment{att}); err != nil {
+				log.Printf("crash alert DM: %v", err)
+			}
+		}
+	}
+	_, _ = s.store.Pool.Exec(ctx, `DELETE FROM crash_events WHERE created_at < now() - interval '30 days'`)
+	return nil
+}
+
+func crashHint(reason string, code int32) string {
+	switch {
+	case reason == "OOMKilled":
+		return "内存超出上限被杀：调高内存上限，或排查内存泄漏"
+	case code == 137:
+		return "被 SIGKILL 结束（常见于内存不足或健康检查失败）"
+	case code == 143:
+		return "收到 SIGTERM 退出"
+	case code == 1:
+		return "应用异常退出，见下方日志"
+	}
+	return ""
+}
+
+func crashAttachment(c k8sdriver.Crash, owner, dash, logTail string) slackAttachment {
+	link := ""
+	if dash != "" {
+		link = strings.TrimSuffix(strings.TrimSuffix(dash, "/"), "/ops") + "/projects/" + c.Slug
+	}
+	fields := []slackField{
+		{"项目", c.Slug, true},
+		{"负责人", owner, true},
+		{"原因", fmt.Sprintf("%s（退出码 %d）", c.Reason, c.ExitCode), true},
+		{"累计重启", fmt.Sprint(c.Restarts), true},
+		{"Pod", c.Pod + " / " + c.Container, false},
+	}
+	if h := crashHint(c.Reason, c.ExitCode); h != "" {
+		fields = append(fields, slackField{"提示", h, false})
+	}
+	text := ""
+	if logTail = strings.TrimSpace(logTail); logTail != "" {
+		text = "```" + logTail + "```"
+	}
+	return slackAttachment{
+		Color: colorCrit, Fallback: fmt.Sprintf("[容器崩溃] %s %s", c.Slug, c.Reason),
+		Title: "💥 容器崩溃 · " + c.Slug, TitleLink: link, Text: text,
+		Fields: fields, Footer: "iai 运维监控", TS: c.FinishedAt.Unix(),
+	}
 }

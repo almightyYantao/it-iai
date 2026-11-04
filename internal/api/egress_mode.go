@@ -54,7 +54,7 @@ func (s *Server) handlePatchEgressMode(w http.ResponseWriter, r *http.Request) {
 			err = s.deployer.SyncEgressPolicy(ctx, p.Slug, allows, enforce)
 		}
 		if err == nil {
-			err = s.deployer.SetProxyEnv(ctx, p.Slug, proxyURL, s.quotaFor(ctx, p.ID))
+			err = s.deployer.SetProxyEnv(ctx, p.Slug, proxyURL, s.quotaFor(ctx, p.ID), s.projectVolumes(ctx, p.ID))
 		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "egress_sync", err.Error())
@@ -433,7 +433,7 @@ func (s *Server) SweepEgressModesAtStartup(ctx context.Context) {
 			err = s.deployer.SyncEgressPolicy(ctx, p.slug, allows, enforce)
 		}
 		if err == nil {
-			err = s.deployer.SetProxyEnv(ctx, p.slug, proxyURL, s.quotaFor(ctx, p.id))
+			err = s.deployer.SetProxyEnv(ctx, p.slug, proxyURL, s.quotaFor(ctx, p.id), s.projectVolumes(ctx, p.id))
 		}
 		if err != nil {
 			log.Printf("egress mode sweep %s: %v", p.slug, err)

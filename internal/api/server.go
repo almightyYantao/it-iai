@@ -85,6 +85,8 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/v1/_internal/verify-api-token", s.handleInternalVerifyAPIToken)
 	// Public: the one-time token in the path is the credential.
 	r.Get("/v1/agent-join/{token}/install.sh", s.handleAgentInstallScript)
+	// Public: the single-use ticket is the credential (WebSocket can't send headers).
+	r.Get("/v1/exec", s.handleExecWS)
 
 	// OIDC code-flow endpoints — unauthenticated by design.
 	r.Get("/v1/auth/oidc-status", s.handleOIDCStatus)
@@ -144,6 +146,11 @@ func (s *Server) Routes() http.Handler {
 				r.Get("/egress-report", s.handleEgressReport)
 				r.Get("/quota", s.handleGetProjectQuota)
 				r.Put("/quota", s.handlePutProjectQuota)
+				r.Get("/volumes", s.handleListVolumes)
+				r.Put("/volumes", s.handlePutVolumes)
+				r.Get("/pods", s.handleProjectPods)
+				r.Get("/logs", s.handleProjectLogs)
+				r.Post("/exec-ticket", s.handleExecTicket)
 				r.Route("/path-rules", func(r chi.Router) {
 					r.Get("/", s.handleListPathRules)
 					r.Post("/", s.handleCreatePathRule)

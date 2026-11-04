@@ -165,7 +165,7 @@ func (s *Server) handlePutProjectQuota(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.deployer != nil {
 		_, _, proxyURL, _ := s.egressConfigForProject(ctx, p.ID)
-		if err := s.deployer.SetProxyEnv(ctx, p.Slug, proxyURL, s.quotaFor(ctx, p.ID)); err != nil {
+		if err := s.deployer.SetProxyEnv(ctx, p.Slug, proxyURL, s.quotaFor(ctx, p.ID), s.projectVolumes(ctx, p.ID)); err != nil {
 			writeError(w, http.StatusInternalServerError, "apply", err.Error())
 			return
 		}

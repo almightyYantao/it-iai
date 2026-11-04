@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -53,6 +54,7 @@ const apiTokenVerifyMiddlewareRef = "oauth2-proxy-iai-api-token-verify@kubernete
 type Deployer struct {
 	// Interface rather than *Clientset so tests can inject a fake.
 	cs           kubernetes.Interface
+	restCfg      *rest.Config      // for exec (SPDY)
 	dyn          dynamic.Interface // for Traefik Middleware CRs we don't import directly
 	baseDomain   string
 	ingressClass string
@@ -106,6 +108,7 @@ func New(opts DeployerOpts) (*Deployer, error) {
 	}
 	return &Deployer{
 		cs:                       cs,
+		restCfg:                  cfg,
 		dyn:                      dyn,
 		baseDomain:               opts.BaseDomain,
 		ingressClass:             opts.IngressClass,
@@ -148,6 +151,8 @@ type ApplyInput struct {
 	ProxyURL string
 	// Quota: requests/limits after per-project and platform defaults.
 	Quota Quota
+	// Volumes are persistent paths (PVCs) mounted into the app container.
+	Volumes []Volume
 }
 
 // Litestream defaults — kept as package-level constants so the init / sidecar
@@ -679,6 +684,12 @@ func (d *Deployer) applyDeployment(ctx context.Context, in ApplyInput) error {
 			},
 		},
 	}
+	if len(in.Volumes) > 0 {
+		if err := d.EnsureVolumes(ctx, in.Slug, in.Volumes); err != nil {
+			return err
+		}
+	}
+	applyVolumes(&dep.Spec, in.Volumes)
 
 	cur, err := d.cs.AppsV1().Deployments(ns).Get(ctx, name, metav1.GetOptions{})
 	if apierr.IsNotFound(err) {
@@ -1549,7 +1560,12 @@ func withProxyEnv(env []corev1.EnvVar, proxyURL, noProxy string) []corev1.EnvVar
 
 // SetProxyEnv rewrites the proxy env on the project's running Deployment
 // (a rollout). No Deployment yet is fine: the next Apply injects it.
-func (d *Deployer) SetProxyEnv(ctx context.Context, slug, proxyURL string, q Quota) error {
+func (d *Deployer) SetProxyEnv(ctx context.Context, slug, proxyURL string, q Quota, vols []Volume) error {
+	if len(vols) > 0 {
+		if err := d.EnsureVolumes(ctx, slug, vols); err != nil {
+			return err
+		}
+	}
 	api := d.cs.AppsV1().Deployments(d.namespaceFor(slug))
 	dep, err := api.Get(ctx, "app", metav1.GetOptions{})
 	if apierr.IsNotFound(err) {
@@ -1571,6 +1587,7 @@ func (d *Deployer) SetProxyEnv(ctx context.Context, slug, proxyURL string, q Quo
 			c.Env = withProxyEnv(c.Env, proxyURL, d.noProxy())
 		}
 	}
+	applyVolumes(&dep.Spec, vols)
 	_, err = api.Update(ctx, dep, metav1.UpdateOptions{})
 	return err
 }

@@ -1,3 +1,4 @@
+import { RuntimePanel } from "../components/RuntimePanel";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -182,6 +183,10 @@ export function ProjectDetail() {
       )}
 
       <div className="mt-10">
+        <RuntimePanel slug={slug} />
+      </div>
+
+      <div className="mt-8">
         <ProjectNamePanel
           slug={slug}
           initialName={p.name || slug}

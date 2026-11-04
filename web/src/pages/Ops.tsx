@@ -136,19 +136,23 @@ function Agents() {
 function AlertSettings() {
   const q = useQuery({ queryKey: ["alert-settings"], queryFn: api.alertSettings });
   const [hook, setHook] = useState("");
+  const [bot, setBot] = useState("");
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [dash, setDash] = useState<string | null>(null);
   const en = enabled ?? q.data?.enabled ?? false;
   const ds = dash ?? q.data?.dashboard_url ?? `${location.origin}/ops`;
-  const save = useMutation({ mutationFn: () => api.putAlertSettings({ enabled: en, dashboard_url: ds, ...(hook ? { webhook_url: hook } : {}) }),
-    onSuccess: () => { toast.success("已保存"); setHook(""); q.refetch(); }, onError: err });
+  const save = useMutation({ mutationFn: () => api.putAlertSettings({ enabled: en, dashboard_url: ds, ...(hook ? { webhook_url: hook } : {}), ...(bot ? { bot_token: bot } : {}) }),
+    onSuccess: () => { toast.success("已保存"); setHook(""); setBot(""); q.refetch(); }, onError: err });
   const test = useMutation({ mutationFn: api.testAlert, onSuccess: () => toast.success("测试消息已发送"), onError: err });
   return (
-    <Card><CardHeader title="Slack 告警" description="新告警立即推送，未恢复的每 30 分钟提醒一次，恢复时推送绿色消息。消息使用 attachments 格式。" />
+    <Card><CardHeader title="Slack 告警" description="新告警立即推送，未恢复的每 30 分钟提醒一次，恢复时推送绿色消息；容器崩溃（OOMKilled、异常退出）单独推送并附最后 15 行日志。消息使用 attachments 格式。" />
       <CardBody className="max-w-xl space-y-4">
         <label className="flex items-center gap-3"><Switch checked={en} onCheckedChange={setEnabled} /><span>启用推送</span></label>
         <div><div className="mb-1.5 text-[13px] font-medium">Incoming Webhook URL {q.data?.configured && <Badge variant="success">已配置</Badge>}</div>
           <Input type="password" className="font-mono" placeholder={q.data?.configured ? "已保存，留空则不修改" : "https://hooks.slack.com/services/..."} value={hook} onChange={(e) => setHook(e.target.value)} /></div>
+        <div><div className="mb-1.5 text-[13px] font-medium">Bot Token（私信项目负责人） {q.data?.bot_configured && <Badge variant="success">已配置</Badge>}</div>
+          <Input type="password" className="font-mono" placeholder={q.data?.bot_configured ? "已保存，留空则不修改" : "xoxb-...（需要 chat:write、users:read.email 权限）"} value={bot} onChange={(e) => setBot(e.target.value)} />
+          <p className="mt-1 text-[12px] text-ink-faint">容器崩溃时，除了发到频道，还会按负责人邮箱找到 Slack 账号私信他。</p></div>
         <div><div className="mb-1.5 text-[13px] font-medium">看板地址（消息里的跳转链接）</div><Input value={ds} onChange={(e) => setDash(e.target.value)} /></div>
         <div className="flex gap-2"><Button disabled={save.isPending} onClick={() => save.mutate()}>保存</Button>
           <Button variant="secondary" disabled={!q.data?.configured || test.isPending} onClick={() => test.mutate()}>发送测试消息</Button></div>
